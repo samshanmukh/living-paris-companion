@@ -1,23 +1,28 @@
 import { motion } from "framer-motion";
 import { useCityStore } from "@/store/useCityStore";
-import { DEFAULT_SUGGESTIONS, starterSuggestions, suggestionsForMood, type Suggestion } from "@/lib/suggestions";
+import { starterSuggestions, suggestionsForMood, type Suggestion } from "@/lib/suggestions";
 import type { MoodType } from "@/lib/types";
 
 interface Props {
-  /** Override suggestions; defaults to mood-based or starter set. */
   items?: Suggestion[];
   disabled?: boolean;
 }
 
 export function SuggestionChips({ items, disabled }: Props) {
-  const send = useCityStore((s) => s.send);
-  const startRoute = useCityStore((s) => s.startRoute);
+  const pickSuggestion = useCityStore((s) => s.pickSuggestion);
+  const conversationChips = useCityStore((s) => s.conversationChips);
   const mood = useCityStore((s) => s.mood);
   const hasSent = useCityStore((s) => s.hasSent);
   const isThinking = useCityStore((s) => s.isThinking);
   const userLocation = useCityStore((s) => s.userLocation);
 
-  const chips = items ?? (hasSent ? suggestionsForMood(mood as MoodType) : starterSuggestions(Boolean(userLocation)));
+  const chips =
+    items ??
+    (conversationChips.length > 0
+      ? conversationChips
+      : hasSent
+        ? suggestionsForMood(mood as MoodType)
+        : starterSuggestions(Boolean(userLocation)));
 
   return (
     <div
@@ -27,14 +32,14 @@ export function SuggestionChips({ items, disabled }: Props) {
     >
       {chips.map((s, i) => (
         <motion.button
-          key={s.label}
+          key={`${s.label}-${i}`}
           type="button"
           disabled={disabled || isThinking}
           initial={{ opacity: 0, y: 8, scale: 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: "spring", stiffness: 320, damping: 24, delay: i * 0.04 }}
           whileTap={{ scale: 0.96 }}
-          onClick={() => (s.action === "start-route" ? void startRoute() : void send(s.prompt))}
+          onClick={() => void pickSuggestion(s)}
           className="shrink-0 rounded-full font-medium transition-opacity disabled:opacity-45"
           style={{
             padding: "10px 18px",

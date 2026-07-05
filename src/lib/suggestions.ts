@@ -5,6 +5,13 @@ export type Suggestion = {
   prompt: string;
   mood?: MoodType;
   action?: "start-route";
+  /** Subtle map relight when tapped (Paris hour 0–23). */
+  hour?: number;
+  walk?: number;
+  budget?: number;
+  indoor?: boolean;
+  /** Brief label for the “what changed” chip on map. */
+  mapHint?: string;
 };
 
 /** Default chips shown before the first message — matches product mockups. */

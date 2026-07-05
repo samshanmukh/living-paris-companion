@@ -6,6 +6,8 @@ import type {
   ParisFeature,
   ParisFeatureCollection,
 } from "./types";
+import { parseModelChips } from "@/lib/conversationChips";
+import type { Suggestion } from "@/lib/suggestions";
 
 export function mergeProfile(prev: GuestProfile, incoming?: Partial<GuestProfile> | null): GuestProfile {
   if (!incoming) return prev;
@@ -55,6 +57,7 @@ export function normalizeConciergeResponse(data: Record<string, unknown>): {
   profile?: Partial<GuestProfile>;
   query?: Partial<IntentQuery>;
   actions: MapAction[];
+  chips?: Suggestion[];
 } {
   const reply =
     (typeof data.reply === "string" && data.reply) ||
@@ -81,7 +84,9 @@ export function normalizeConciergeResponse(data: Record<string, unknown>): {
     actions.unshift({ type: "setAccent", mood: query.mood });
   }
 
-  return { reply, profile, query, actions };
+  const chips = parseModelChips(data.chips);
+
+  return { reply, profile, query, actions, ...(chips.length ? { chips } : {}) };
 }
 
 export function findFeature(

@@ -11,6 +11,9 @@ import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { isRainFriendly } from "@/lib/rainMode";
 import { refinePlacesForIntent } from "@/lib/placeSearch";
+import { resolveConversationChips } from "@/lib/conversationChips";
+import { applySuggestionEffects } from "@/lib/applySuggestion";
+import type { Suggestion } from "@/lib/suggestions";
 import type { MapFocus } from "@/lib/mapCamera";
 import type {
   IntentQuery,
@@ -193,6 +196,7 @@ interface CityState {
   routePreviewProgress: number;
   routePreviewGeneration: number;
   activeExperienceIndex: number;
+  conversationChips: Suggestion[];
   setHighlightedIds: (ids: string[]) => void;
   setMapAnnotation: (a: MapAnnotation | null) => void;
   setMoodFromAction: (mood: MoodType) => void;
@@ -217,6 +221,8 @@ interface CityState {
   finishRoutePreview: () => void;
   setActiveExperienceIndex: (index: number) => void;
   focusExperience: (index?: number) => void;
+  setConversationHints: (hints: string[]) => void;
+  pickSuggestion: (chip: Suggestion) => Promise<void>;
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -251,6 +257,7 @@ export const useCityStore = create<CityState>((set, get) => ({
   routePreviewProgress: 0,
   routePreviewGeneration: 0,
   activeExperienceIndex: 0,
+  conversationChips: [],
 
   setHighlightedIds: (ids) => set({ highlightedIds: ids }),
   setMapAnnotation: (a) => set({ mapAnnotation: a }),
@@ -309,6 +316,20 @@ export const useCityStore = create<CityState>((set, get) => ({
     } else if (coords.length === 1) {
       get().setMapFocus({ kind: "place", lon: coords[0][0], lat: coords[0][1] });
     }
+  },
+
+  setConversationHints: (hints) => {
+    set({ lastChanged: hints });
+    window.setTimeout(() => set({ lastChanged: [] }), 3200);
+  },
+
+  pickSuggestion: async (chip) => {
+    applySuggestionEffects(chip);
+    if (chip.action === "start-route") {
+      await get().startRoute();
+      return;
+    }
+    await get().send(chip.prompt);
   },
 
   setLiveTranscript: (t) => set({ liveTranscript: t }),
@@ -372,6 +393,14 @@ export const useCityStore = create<CityState>((set, get) => ({
       const reply = cmd.reply ?? "Done.";
       set((s) => ({
         messages: [...s.messages, { role: "ai", text: reply }],
+        conversationChips: resolveConversationChips({
+          lastAiText: reply,
+          messages: [...s.messages, { role: "ai", text: reply }],
+          mood: get().mood,
+          hasPlan: (get().geojson?.features.length ?? 0) >= 2,
+          hasLocation: Boolean(get().userLocation),
+          hasSent: true,
+        }),
       }));
       void speak(reply);
 
@@ -412,7 +441,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     const priorMessages = get().messages.slice(0, -1);
     const prevMood = get().mood;
     const prevCount = get().geojson?.features.length ?? 0;
-    set({ isThinking: true, pipelineStep: 0, lastChanged: [], highlightedIds: [], mapAnnotation: null });
+    set({ isThinking: true, pipelineStep: 0, highlightedIds: [], mapAnnotation: null });
 
     try {
       useTraitsStore.getState().ingest(clean);
@@ -422,12 +451,14 @@ export const useCityStore = create<CityState>((set, get) => ({
       let reply: string;
       let query: Partial<IntentQuery> | undefined;
       let actions: MapAction[] = [];
+      let modelChips: Suggestion[] | undefined;
       try {
         set({ pipelineStep: 1 });
         const out = await chatWithParis(priorMessages, clean, guestContext);
         reply = out.reply;
         query = out.query;
         actions = out.actions;
+        modelChips = out.chips;
         if (out.profile) traitsStore.mergeGuestProfile(out.profile);
       } catch (error) {
         query = parseIntent(clean);
@@ -487,6 +518,19 @@ export const useCityStore = create<CityState>((set, get) => ({
       const places = refinedFeatures.slice(0, 4);
       const nextMood: MoodType = mergedQuery.mood ?? get().mood;
       const choreographed = actions.some((a) => a.type === "flyTo" || a.type === "highlight");
+      const messagesWithReply: ChatMessage[] = [
+        ...get().messages,
+        { role: "ai", text: reply, places: result ? places : undefined },
+      ];
+      const conversationChips = resolveConversationChips({
+        modelChips,
+        lastAiText: reply,
+        messages: messagesWithReply,
+        mood: nextMood,
+        hasPlan: refinedFeatures.length >= 2,
+        hasLocation: Boolean(userLoc),
+        hasSent: true,
+      });
 
       set((s) => ({
         mood: nextMood,
@@ -506,10 +550,12 @@ export const useCityStore = create<CityState>((set, get) => ({
           : {}),
         isThinking: false,
         pipelineStep: 0,
-        messages: [...s.messages, { role: "ai", text: reply, places: result ? places : undefined }],
-        lastChanged: result || refinedFeatures.length
-          ? diffLabels(prevMood, nextMood, prevCount, refinedFeatures.length, rainOn)
-          : [],
+        messages: messagesWithReply,
+        conversationChips,
+        lastChanged:
+          result || refinedFeatures.length
+            ? diffLabels(prevMood, nextMood, prevCount, refinedFeatures.length, rainOn)
+            : s.lastChanged,
       }));
 
       setTimeout(() => set({ lastChanged: [] }), 3200);
