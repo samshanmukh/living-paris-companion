@@ -5,6 +5,7 @@ import { PlaceDetail } from "@/components/PlaceDetail";
 import { LivingParisBadge } from "@/components/LivingParisBadge";
 import { PipelineViz } from "@/components/PipelineViz";
 import { ConversationalPanel } from "@/components/ConversationalPanel";
+import { WhatChangedChips } from "@/components/WhatChangedChips";
 import { RouteBar } from "@/components/RouteBar";
 import { RoutePreviewCard } from "@/components/RoutePreviewCard";
 import { moodStyleVars } from "@/lib/moods";
@@ -51,10 +52,9 @@ function Index() {
   return (
     <MotionConfig reducedMotion={reducedMotion ? "always" : "never"}>
       <motion.main
-        key={mood}
-        initial={reducedMotion ? false : { opacity: 0.94, filter: "brightness(0.98)" }}
-        animate={{ opacity: 1, filter: "brightness(1)" }}
-        transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+        initial={reducedMotion ? false : { opacity: 0.97 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
         className="relative h-screen w-screen overflow-hidden"
         style={{
           background: "var(--paper)",
@@ -65,6 +65,7 @@ function Index() {
         <MapCanvasGate />
 
         <LivingParisBadge />
+        <WhatChangedChips />
         <RoutePreviewCard />
         <PipelineViz />
 

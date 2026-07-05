@@ -25,8 +25,10 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
   const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
 
   const moodCam = moodMapProfile(mood);
-  const liveZoom = () =>
-    useUIStore.getState().assistantExpanded || routePreviewPlaying;
+  const liveZoom = () => {
+    const ui = useUIStore.getState();
+    return ui.assistantExpanded || ui.assistantFullscreen || routePreviewPlaying;
+  };
 
   useEffect(() => {
     if (!mapReady || !selected) return;
@@ -111,7 +113,7 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
               [[minLon, minLat], [maxLon, maxLat]],
               {
                 padding: MAP_PADDING,
-                duration: duration * 0.85,
+                duration: duration * 1.05,
                 maxZoom: PLACES_OVERVIEW_MAX_ZOOM,
                 pitch: moodCam.pitch - 6,
                 bearing: moodCam.bearing,

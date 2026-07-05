@@ -181,7 +181,9 @@ export function MapCanvas() {
       });
     } catch {}
 
-    setMapReady(true);
+    const markReady = () => setMapReady(true);
+    if (map.isStyleLoaded()) markReady();
+    else map.once("style.load", markReady);
 
     const target = LAUNCH_VIEW;
     if (reduced) {
@@ -235,9 +237,17 @@ export function MapCanvas() {
         onLoad={onMapLoad}
         antialias
       >
-        <RouteLineLayer />
-        <RoutePreviewOverlay />
-        <AirQualityLayer />
+        {mapReady && (
+          <>
+            <MapLayerErrorBoundary name="route">
+              <RouteLineLayer />
+            </MapLayerErrorBoundary>
+            <RoutePreviewOverlay />
+            <MapLayerErrorBoundary name="aqi">
+              <AirQualityLayer />
+            </MapLayerErrorBoundary>
+          </>
+        )}
         <MapLayerErrorBoundary name="sun">
           <MapSunLayer />
         </MapLayerErrorBoundary>

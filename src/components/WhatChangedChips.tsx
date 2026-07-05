@@ -13,8 +13,8 @@ export function WhatChangedChips() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ type: "spring", stiffness: 220, damping: 22 }}
-          className="pointer-events-none fixed z-20 hidden sm:flex items-center gap-1.5 left-1/2 -translate-x-1/2"
-          style={{ top: belowTopBar(36) }}
+          className="pointer-events-none fixed z-20 flex items-center gap-1.5 left-1/2 -translate-x-1/2"
+          style={{ top: belowTopBar(36), opacity: 0.92 }}
         >
           {changed.map((label, i) => (
             <motion.span

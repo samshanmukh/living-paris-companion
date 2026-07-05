@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ChevronLeft, ChevronRight, Map, Sparkles, X } from "lucide-react";
 import { useCityStore } from "@/store/useCityStore";
 import { useUIStore } from "@/store/useUIStore";
+import { chatPanelBottomOffset, resolveChatPanelSize } from "@/lib/chatPanel";
 
 /** Floating "Live this one" controls + walk-through navigation. */
 export function RouteBar() {
@@ -19,7 +20,8 @@ export function RouteBar() {
   const focusRouteStop = useCityStore((s) => s.focusRouteStop);
   const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
   const assistantExpanded = useUIStore((s) => s.assistantExpanded);
-  const panelExpanded = assistantExpanded || routePreviewPlaying;
+  const assistantFullscreen = useUIStore((s) => s.assistantFullscreen);
+  const panelSize = resolveChatPanelSize(assistantFullscreen, assistantExpanded, routePreviewPlaying);
 
   const stopCount = geojson?.features.length ?? 0;
   const hasPlan = stopCount >= 1;
@@ -46,9 +48,7 @@ export function RouteBar() {
         exit={{ opacity: 0, y: 8 }}
         className="pointer-events-auto fixed z-[45] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
         style={{
-          bottom: panelExpanded
-            ? "calc(min(58vh, 480px) + 12px + env(safe-area-inset-bottom))"
-            : "calc(min(46vh, 380px) + 12px + env(safe-area-inset-bottom))",
+          bottom: chatPanelBottomOffset(panelSize),
         }}
       >
         {route && navStops > 1 && !routePreviewPlaying && (

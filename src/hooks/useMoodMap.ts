@@ -49,7 +49,7 @@ export function useMoodMap(mapRef: React.RefObject<MapRef | null>, mapReady: boo
       map.easeTo({
         pitch: profile.pitch,
         bearing: profile.bearing,
-        duration: reduced ? 280 : 1400,
+        duration: reduced ? 280 : 2200,
         essential: true,
       });
     } catch { /* ignore */ }

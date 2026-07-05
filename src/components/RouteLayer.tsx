@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useMapStyleReady } from "@/hooks/useMapStyleReady";
 import { Layer, Marker as MapMarker, Source } from "react-map-gl/mapbox";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Feature, LineString } from "geojson";
@@ -23,6 +24,7 @@ function lineFeature(coords: [number, number][]): Feature<LineString> | null {
 
 /** Thin dotted route line — renders below destination markers. */
 export function RouteLineLayer() {
+  const styleReady = useMapStyleReady();
   const route = useCityStore((s) => s.route);
   const geometry = route?.geometry ?? null;
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
@@ -48,7 +50,7 @@ export function RouteLineLayer() {
     };
   }, [geometry, routeWaypoints, activeRouteStop, routePreviewPlaying]);
 
-  if (!geometry) return null;
+  if (!styleReady || !geometry) return null;
 
   return (
     <>

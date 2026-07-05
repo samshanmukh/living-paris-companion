@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMapStyleReady } from "@/hooks/useMapStyleReady";
 import { Layer, Marker as MapMarker, Source, useMap } from "react-map-gl/mapbox";
 import { AnimatePresence } from "framer-motion";
 import { useSceneStore } from "@/store/useSceneStore";
@@ -10,6 +11,7 @@ const RASTER_SOURCE_ID = "lp-aqi-raster-src";
 const RASTER_LAYER_ID = "lp-aqi-raster";
 
 export function AirQualityLayer() {
+  const styleReady = useMapStyleReady();
   const visible = useSceneStore((s) => s.airQualityVisible);
   const snapshot = useSceneStore((s) => s.airQualitySnapshot);
   const setSnapshot = useSceneStore((s) => s.setAirQualitySnapshot);
@@ -74,7 +76,7 @@ export function AirQualityLayer() {
     return () => cancelAnimationFrame(frame);
   }, [visible, mapRef, reduced]);
 
-  if (!visible) return null;
+  if (!visible || !styleReady) return null;
 
   const stations = snapshot ? visibleStations(snapshot.stations, zoom) : [];
 
