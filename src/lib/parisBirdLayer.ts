@@ -28,6 +28,7 @@ interface BirdsLayerState {
   camera: THREE.Camera;
   birds: BirdMesh[];
   lastTime: number;
+  broken: boolean;
   getPreset: () => LightPreset;
   getBirdCount: () => number;
 }
@@ -53,7 +54,7 @@ function createBirdMesh(THREE: ThreeModule, color: number): Omit<BirdMesh, "orbi
   leftWing.position.set(-0.3, 0, 0);
   leftWing.rotation.z = 0.35;
 
-  const rightWing = new THREE.Mesh(wingGeom, material);
+  const rightWing = new THREE.Mesh(wingGeom.clone(), material);
   rightWing.position.set(0.3, 0, 0);
   rightWing.rotation.y = Math.PI;
   rightWing.rotation.z = -0.35;
@@ -71,11 +72,12 @@ function syncBirdCount(state: BirdsLayerState) {
   for (const bird of state.birds) state.scene.remove(bird.root);
   state.birds = [];
 
+  if (target <= 0) return;
+
   const orbits = createBirdOrbits(target);
   const color = birdSilhouetteColor(state.getPreset());
   for (const orbit of orbits) {
     const parts = createBirdMesh(state.THREE, color);
-    parts.root.visible = target > 0;
     state.scene.add(parts.root);
     state.birds.push({ ...parts, orbit, t: orbit.phase / (Math.PI * 2) });
   }
@@ -83,8 +85,9 @@ function syncBirdCount(state: BirdsLayerState) {
 
 function updateBirdMeshes(state: BirdsLayerState, now: number) {
   syncBirdCount(state);
-  const preset = state.getPreset();
-  const color = birdSilhouetteColor(preset);
+  if (state.birds.length === 0) return;
+
+  const color = birdSilhouetteColor(state.getPreset());
   const dt = state.lastTime ? Math.min(0.05, (now - state.lastTime) / 1000) : 0.016;
   state.lastTime = now;
 
@@ -112,6 +115,7 @@ export function createParisBirdsLayer(opts: {
   getBirdCount: () => number;
 }): CustomLayerInterface {
   let state: BirdsLayerState | null = null;
+  let cancelled = false;
 
   return {
     id: BIRDS_LAYER_ID,
@@ -119,47 +123,63 @@ export function createParisBirdsLayer(opts: {
     renderingMode: "3d",
 
     onAdd(map, gl) {
-      void import("three").then((THREE) => {
-        const scene = new THREE.Scene();
-        const camera = new THREE.Camera();
-        const renderer = new THREE.WebGLRenderer({
-          canvas: map.getCanvas(),
-          context: gl as WebGLRenderingContext,
-          antialias: true,
-        });
-        renderer.autoClear = false;
+      cancelled = false;
+      void import("three")
+        .then((THREE) => {
+          if (cancelled) return;
 
-        state = {
-          map,
-          THREE,
-          renderer,
-          scene,
-          camera,
-          birds: [],
-          lastTime: 0,
-          getPreset: opts.getPreset,
-          getBirdCount: opts.getBirdCount,
-        };
-        syncBirdCount(state);
-      });
+          const renderer = new THREE.WebGLRenderer({
+            canvas: map.getCanvas(),
+            context: gl as WebGLRenderingContext,
+            antialias: true,
+          });
+          renderer.autoClear = false;
+
+          state = {
+            map,
+            THREE,
+            renderer,
+            scene: new THREE.Scene(),
+            camera: new THREE.Camera(),
+            birds: [],
+            lastTime: 0,
+            broken: false,
+            getPreset: opts.getPreset,
+            getBirdCount: opts.getBirdCount,
+          };
+          syncBirdCount(state);
+        })
+        .catch(() => {
+          state = null;
+        });
     },
 
     render(_gl, matrix) {
-      if (!state) return;
+      if (!state || state.broken) return;
 
-      updateBirdMeshes(state, performance.now());
-      if (state.birds.length === 0) return;
+      try {
+        updateBirdMeshes(state, performance.now());
+        if (state.birds.length === 0) return;
 
-      const m = new state.THREE.Matrix4().fromArray(matrix);
-      state.camera.projectionMatrix = m;
-      state.renderer.resetState();
-      state.renderer.render(state.scene, state.camera);
-      state.map.triggerRepaint();
+        const m = new state.THREE.Matrix4().fromArray(matrix);
+        state.camera.projectionMatrix = m;
+        state.renderer.resetState();
+        state.renderer.render(state.scene, state.camera);
+        state.map.triggerRepaint();
+      } catch {
+        state.broken = true;
+        state.birds = [];
+      }
     },
 
     onRemove() {
+      cancelled = true;
       if (!state) return;
-      state.renderer.dispose();
+      try {
+        state.renderer.dispose();
+      } catch {
+        /* ignore */
+      }
       state.scene.clear();
       state = null;
     },

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MotionConfig, motion } from "framer-motion";
-import { useEffect } from "react";
-import { MapCanvas } from "@/components/MapCanvas";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { PlaceDetail } from "@/components/PlaceDetail";
 import { LivingParisBadge } from "@/components/LivingParisBadge";
 import { PipelineViz } from "@/components/PipelineViz";
@@ -12,6 +11,29 @@ import { moodStyleVars } from "@/lib/moods";
 import { useCityStore } from "@/store/useCityStore";
 import { usePrefsStore } from "@/store/usePrefsStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
+
+const MapCanvas = lazy(() =>
+  import("@/components/MapCanvas").then((m) => ({ default: m.MapCanvas })),
+);
+
+function MapCanvasGate() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return (
+      <div className="absolute inset-0" style={{ background: "var(--paper-2, var(--paper))" }} />
+    );
+  }
+  return (
+    <Suspense
+      fallback={
+        <div className="absolute inset-0" style={{ background: "var(--paper-2, var(--paper))" }} />
+      }
+    >
+      <MapCanvas />
+    </Suspense>
+  );
+}
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -40,7 +62,7 @@ function Index() {
           boxShadow: `inset 0 0 120px var(--mood-ui-tint, transparent)`,
         }}
       >
-        <MapCanvas />
+        <MapCanvasGate />
 
         <LivingParisBadge />
         <RoutePreviewCard />

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Component, type ReactNode, useEffect, useRef } from "react";
 import { useMap } from "react-map-gl/mapbox";
 import { BIRDS_LAYER_ID, createParisBirdsLayer } from "@/lib/parisBirdLayer";
 import { birdCountForPreset, birdsVisible } from "@/lib/parisBirds";
@@ -6,8 +6,19 @@ import { resolveLightPreset } from "@/lib/parisWeather";
 import { usePrefsStore } from "@/store/usePrefsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 
-/** Ambient 3D birds circling above Paris — visible at high pitch, dawn through dusk. */
-export function MapBirdsLayer() {
+class BirdsErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+function MapBirdsLayerInner() {
   const { current: mapRef } = useMap();
   const hourOverride = useSceneStore((s) => s.hourOverride);
   const parisConditions = useSceneStore((s) => s.parisConditions);
@@ -30,6 +41,7 @@ export function MapBirdsLayer() {
 
     const getBirdCount = () => {
       if (ctxRef.current.reduced) return 0;
+      if (!map.isStyleLoaded()) return 0;
       const preset = getPreset();
       if (
         !birdsVisible({
@@ -52,30 +64,28 @@ export function MapBirdsLayer() {
     layerRef.current = layer;
 
     const mount = () => {
-      if (!map.getLayer(BIRDS_LAYER_ID)) {
-        try {
-          map.addLayer(layer);
-        } catch {
-          /* style not ready */
-        }
+      if (!map.isStyleLoaded()) return;
+      if (map.getLayer(BIRDS_LAYER_ID)) return;
+      try {
+        map.addLayer(layer);
+      } catch {
+        /* style not ready or WebGL unavailable */
       }
     };
 
-    const schedule = () => {
-      if (map.isStyleLoaded()) mount();
-    };
+    const schedule = () => mount();
 
-    schedule();
     map.on("load", schedule);
     map.on("styledata", schedule);
     map.on("pitch", schedule);
-    map.on("moveend", schedule);
+
+    const delayId = window.setTimeout(schedule, 1200);
 
     return () => {
+      window.clearTimeout(delayId);
       map.off("load", schedule);
       map.off("styledata", schedule);
       map.off("pitch", schedule);
-      map.off("moveend", schedule);
       if (map.getLayer(BIRDS_LAYER_ID)) {
         try {
           map.removeLayer(BIRDS_LAYER_ID);
@@ -87,4 +97,13 @@ export function MapBirdsLayer() {
   }, [mapRef]);
 
   return null;
+}
+
+/** Ambient 3D birds — isolated so WebGL failures cannot crash the app. */
+export function MapBirdsLayer() {
+  return (
+    <BirdsErrorBoundary>
+      <MapBirdsLayerInner />
+    </BirdsErrorBoundary>
+  );
 }

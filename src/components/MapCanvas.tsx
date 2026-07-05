@@ -19,6 +19,7 @@ import { useMoodMap } from "@/hooks/useMoodMap";
 import { useRoutePreview } from "@/hooks/useRoutePreview";
 import { MAP_PADDING } from "@/lib/mapCamera";
 import { MapFocusVeil } from "./MapFocusVeil";
+import { MapLayerErrorBoundary } from "./MapLayerErrorBoundary";
 import { MapSunLayer } from "./MapSunLayer";
 
 const MapBirdsLayer = lazy(() =>
@@ -240,7 +241,9 @@ export function MapCanvas() {
         <RouteLineLayer />
         <RoutePreviewOverlay />
         <AirQualityLayer />
-        <MapSunLayer />
+        <MapLayerErrorBoundary name="sun">
+          <MapSunLayer />
+        </MapLayerErrorBoundary>
         <Suspense fallback={null}>
           <MapBirdsLayer />
         </Suspense>
