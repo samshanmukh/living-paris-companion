@@ -3,7 +3,7 @@ import Map, { Marker as MapMarker, type MapRef } from "react-map-gl/mapbox";
 import { AnimatePresence } from "framer-motion";
 import { useCityStore } from "@/store/useCityStore";
 import { usePrefsStore } from "@/store/usePrefsStore";
-import { useSceneStore, type Season } from "@/store/useSceneStore";
+import { useSceneStore } from "@/store/useSceneStore";
 import { useUIStore } from "@/store/useUIStore";
 import { ParisMarker } from "./Marker";
 import { MapAnnotationMarker } from "./MapAnnotationMarker";
@@ -27,7 +27,9 @@ import { ExperienceRoutePreview } from "./ExperienceRoutePreview";
 import { buildItineraries } from "@/lib/itinerary";
 import { moodFromParisHour } from "@/lib/moodFromHour";
 import { personaFogBoost } from "@/lib/personaDefaults";
+import { seasonFog } from "@/lib/seasonEffects";
 import { SeasonToggle } from "./SeasonToggle";
+import { SeasonAtmosphereOverlay } from "./SeasonAtmosphereOverlay";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -49,30 +51,6 @@ const LAUNCH_VIEW = {
   pitch: 65,
   bearing: -10,
 } as const;
-
-type FogSpec = {
-  color: string;
-  "high-color": string;
-  "horizon-blend": number;
-  "space-color": string;
-  "star-intensity": number;
-};
-
-function seasonFog(season: Season | null, base: FogSpec): FogSpec {
-  if (!season) return base;
-  switch (season) {
-    case "spring":
-      return { ...base, color: "rgb(236, 244, 232)", "high-color": "rgb(210, 228, 200)" };
-    case "summer":
-      return { ...base, color: "rgb(252, 244, 228)", "high-color": "rgb(240, 220, 180)" };
-    case "autumn":
-      return { ...base, color: "rgb(248, 236, 220)", "high-color": "rgb(210, 170, 120)" };
-    case "winter":
-      return { ...base, color: "rgb(232, 238, 248)", "high-color": "rgb(200, 210, 230)", "star-intensity": 0.12 };
-    default:
-      return base;
-  }
-}
 
 export function MapCanvas() {
   const geojson = useCityStore((s) => s.geojson);
@@ -144,13 +122,15 @@ export function MapCanvas() {
     try {
       if (preset === "night") {
         const boost = personaFogBoost(activePersona);
-        map.setFog({
-          color: `rgb(${18 + boost * 120}, ${20 + boost * 120}, ${32 + boost * 80})`,
-          "high-color": `rgb(${35 + boost * 100}, ${38 + boost * 100}, ${52 + boost * 60})`,
-          "horizon-blend": 0.12 + boost,
-          "space-color": "rgb(12, 14, 24)",
-          "star-intensity": 0.35,
-        });
+        map.setFog(
+          seasonFog(seasonOverride, {
+            color: `rgb(${18 + boost * 120}, ${20 + boost * 120}, ${32 + boost * 80})`,
+            "high-color": `rgb(${35 + boost * 100}, ${38 + boost * 100}, ${52 + boost * 60})`,
+            "horizon-blend": 0.12 + boost,
+            "space-color": "rgb(12, 14, 24)",
+            "star-intensity": 0.35,
+          }),
+        );
       } else if (preset === "dusk") {
         map.setFog(seasonFog(seasonOverride, {
           color: "rgb(55, 48, 42)",
@@ -177,9 +157,18 @@ export function MapCanvas() {
 
     let precip: "rain" | "snow" | "none" = conditions.precip;
     let intensity = conditions.intensity;
-    if (rainOverride === true || rainMode) { precip = "rain"; intensity = Math.max(intensity, 0.65); }
-    else if (rainOverride === false) { precip = "none"; intensity = 0; }
-    else if (seasonOverride === "winter" && conditions.precip === "snow") { precip = "snow"; }
+    if (rainOverride === true || rainMode) {
+      precip = "rain";
+      intensity = Math.max(intensity, 0.65);
+    } else if (rainOverride === false) {
+      precip = "none";
+      intensity = 0;
+    } else if (seasonOverride === "winter") {
+      precip = "snow";
+      intensity = Math.max(intensity, 0.72);
+    } else if (seasonOverride === "spring" || seasonOverride === "autumn") {
+      precip = "none";
+    }
 
     try {
       if (precip === "rain" && anyMap.setRain) {
@@ -347,6 +336,7 @@ export function MapCanvas() {
           })}
         </AnimatePresence>
       </Map>
+      <SeasonAtmosphereOverlay />
       <MapFocusVeil />
       <AirQualityLegend />
     </div>
