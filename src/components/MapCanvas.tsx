@@ -6,7 +6,8 @@ import { usePrefsStore } from "@/store/usePrefsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { ParisMarker } from "./Marker";
 import { MapAnnotationMarker } from "./MapAnnotationMarker";
-import { RouteLayer } from "./RouteLayer";
+import { RouteLineLayer, RouteStopMarkers } from "./RouteLayer";
+import { RoutePreviewOverlay } from "./RoutePreviewOverlay";
 import { UserLocationMarker } from "./UserLocationMarker";
 import { DemoLayers } from "./DemoLayers";
 import { AirQualityLayer } from "./AirQualityLayer";
@@ -14,7 +15,10 @@ import { AirQualityLegend } from "./AirQualityLegend";
 import { MapControls } from "./MapControls";
 import { fetchParisConditions, type ParisConditions, type LightPreset } from "@/lib/parisWeather";
 import { useMapCamera } from "@/hooks/useMapCamera";
+import { useMoodMap } from "@/hooks/useMoodMap";
+import { useRoutePreview } from "@/hooks/useRoutePreview";
 import { MAP_PADDING } from "@/lib/mapCamera";
+import { MapFocusVeil } from "./MapFocusVeil";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -29,7 +33,6 @@ const OPENING_VIEW = {
   bearing: 0,
 } as const;
 
-/** End state after the launch fly-in — tight street-level Paris. */
 const LAUNCH_VIEW = {
   longitude: 2.3498,
   latitude: 48.8572,
@@ -52,6 +55,8 @@ export function MapCanvas() {
   const [mapReady, setMapReady] = useState(false);
 
   useMapCamera(mapRef, mapReady, reduced);
+  useMoodMap(mapRef, mapReady, reduced);
+  useRoutePreview(mapRef, mapReady, reduced);
 
   // Weather polling
   useEffect(() => {
@@ -227,11 +232,13 @@ export function MapCanvas() {
         onLoad={onMapLoad}
         antialias
       >
-        <RouteLayer />
+        <RouteLineLayer />
+        <RoutePreviewOverlay />
         <AirQualityLayer />
         <DemoLayers />
         <UserLocationMarker />
         <MapAnnotationMarker />
+        <RouteStopMarkers />
         <MapControls />
         <AnimatePresence>
           {features.map((f, i) => {
@@ -250,6 +257,7 @@ export function MapCanvas() {
           })}
         </AnimatePresence>
       </Map>
+      <MapFocusVeil />
       <AirQualityLegend />
     </div>
   );

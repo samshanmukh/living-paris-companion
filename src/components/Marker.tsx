@@ -16,6 +16,7 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
   const hover = useCityStore((s) => s.hover);
   const rainMode = useCityStore((s) => s.rainMode);
   const mood = useCityStore((s) => s.mood);
+  const geojson = useCityStore((s) => s.geojson);
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
   const activeRouteStop = useCityStore((s) => s.activeRouteStop);
   const highlightedIds = useCityStore((s) => s.highlightedIds);
@@ -24,10 +25,13 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
   const active = selected || isHover || isHighlighted;
   const dim = rainMode ? rainDim(feature) : 1;
   const stopIndex = routeWaypoints?.findIndex((w) => w.id === feature.properties.id) ?? -1;
-  const onRoute = stopIndex > 0;
-  const isActiveStop = stopIndex === activeRouteStop && stopIndex > 0;
+  const onRoute = stopIndex >= 0;
+  const isActiveStop = stopIndex === activeRouteStop && stopIndex >= 0;
+  const showRouteBadge = onRoute;
+  const placeCount = geojson?.features.length ?? 0;
   const { title, subtitle } = markerLabel(feature, mood, index);
-  const showLabel = dim > 0.45;
+  const showLabel = dim > 0.4 && (placeCount <= 5 || active || onRoute);
+  const labelEmphasis = active || isActiveStop || isHighlighted;
 
   const dotColors = ["#C77E6A", "#7E9B6E", "#7C93A6", "#C79A4E"];
   const dotColor = dotColors[index % dotColors.length];
@@ -36,18 +40,25 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
     <div className="relative -translate-x-1/2 -translate-y-1/2" style={{ pointerEvents: "auto" }}>
       {showLabel && (
         <motion.div
-          initial={{ opacity: 0, x: 6 }}
-          animate={{ opacity: dim, x: 0 }}
-          transition={{ type: "spring", stiffness: 280, damping: 24, delay: index * 0.06 + 0.12 }}
-          className="glass-strong pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 whitespace-nowrap"
+          initial={{ opacity: 0, y: 6, scale: 0.94 }}
+          animate={{ opacity: labelEmphasis ? 1 : dim * 0.92, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 280, damping: 24, delay: index * 0.05 + 0.08 }}
+          className="pointer-events-none absolute bottom-full left-1/2 mb-2.5 max-w-[168px] -translate-x-1/2 whitespace-nowrap"
           style={{
-            padding: "5px 10px",
+            padding: labelEmphasis ? "7px 12px" : "5px 10px",
             borderRadius: 999,
-            fontSize: 11.5,
+            fontSize: labelEmphasis ? 12.5 : 11.5,
             fontWeight: 600,
             color: "var(--ink)",
-            boxShadow: "0 4px 16px rgba(28,26,22,0.14)",
-            maxWidth: 148,
+            background: "rgba(253, 251, 246, 0.96)",
+            backdropFilter: "blur(12px) saturate(1.2)",
+            WebkitBackdropFilter: "blur(12px) saturate(1.2)",
+            border: labelEmphasis
+              ? "1px solid rgba(255,255,255,0.92)"
+              : "1px solid rgba(255,255,255,0.75)",
+            boxShadow: labelEmphasis
+              ? "0 8px 28px rgba(28,26,22,0.22), 0 2px 8px rgba(28,26,22,0.12)"
+              : "0 4px 18px rgba(28,26,22,0.16)",
           }}
         >
           <span className="block truncate">{title}</span>
@@ -73,7 +84,7 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
         aria-label={feature.properties.name}
         style={{ background: "transparent", border: 0, padding: 0 }}
       >
-        {onRoute && (
+        {showRouteBadge && (
           <span
             className="absolute -top-1 -right-1 z-10 grid place-items-center rounded-full font-bold"
             style={{
@@ -82,10 +93,10 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
               fontSize: isActiveStop ? 10 : 9,
               background: isActiveStop ? "var(--accent)" : "var(--ink)",
               color: "var(--paper-2)",
-              boxShadow: isActiveStop ? "0 0 0 3px rgba(199,126,106,0.45)" : undefined,
+              boxShadow: isActiveStop ? "0 0 0 3px rgba(199,126,106,0.45)" : "0 2px 6px rgba(28,26,22,0.2)",
             }}
           >
-            {stopIndex}
+            {stopIndex + 1}
           </span>
         )}
         {(active || isActiveStop || isHighlighted) && (
@@ -106,13 +117,13 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
         <span
           className="block rounded-full"
           style={{
-            width: active ? 16 : 13,
-            height: active ? 16 : 13,
+            width: active ? 17 : 14,
+            height: active ? 17 : 14,
             background: dotColor,
             border: "2.5px solid var(--paper-2)",
             boxShadow: active
-              ? `0 6px 18px rgba(28,26,22,0.28), 0 0 0 1px ${dotColor}55`
-              : "0 3px 10px rgba(28,26,22,0.22)",
+              ? `0 8px 22px rgba(28,26,22,0.3), 0 0 0 1px ${dotColor}66`
+              : "0 4px 12px rgba(28,26,22,0.24)",
           }}
         />
       </motion.button>

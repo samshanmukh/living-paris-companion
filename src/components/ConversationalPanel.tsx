@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Mic } from "lucide-react";
 import { useCityStore } from "@/store/useCityStore";
+import { useUIStore } from "@/store/useUIStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { TRAIT_LABELS, type Trait } from "@/lib/traitsExtractor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -28,6 +29,7 @@ function learnedLine(traits: Record<Trait, number>): string | null {
 export function ConversationalPanel() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const messages = useCityStore((s) => s.messages);
   const mood = useCityStore((s) => s.mood);
@@ -35,8 +37,10 @@ export function ConversationalPanel() {
   const pipelineStep = useCityStore((s) => s.pipelineStep);
   const liveTranscript = useCityStore((s) => s.liveTranscript);
   const hasSent = useCityStore((s) => s.hasSent);
+  const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
   const send = useCityStore((s) => s.send);
   const select = useCityStore((s) => s.select);
+  const assistantExpanded = useUIStore((s) => s.assistantExpanded);
   const traits = useTraitsStore((s) => s.traits);
   const guestName = useTraitsStore((s) => s.profile.name);
 
@@ -45,11 +49,16 @@ export function ConversationalPanel() {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const lastAI = [...messages].reverse().find((m) => m.role === "ai");
   const learned = learnedLine(traits);
+  const expanded = assistantExpanded || routePreviewPlaying;
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, isThinking, liveTranscript]);
+  }, [messages, isThinking, liveTranscript, expanded]);
+
+  useEffect(() => {
+    if (expanded) inputRef.current?.focus();
+  }, [expanded]);
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -62,13 +71,16 @@ export function ConversationalPanel() {
   return (
     <motion.section
       initial={{ y: 40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
+      animate={{
+        y: 0,
+        opacity: 1,
+        maxHeight: expanded ? "min(58vh, 480px)" : "min(46vh, 380px)",
+      }}
       transition={{ type: "spring", stiffness: 220, damping: 28, delay: 0.15 }}
       className="pointer-events-auto fixed z-50 inset-x-0 flex flex-col"
       style={{
         bottom: 0,
         paddingBottom: bottomSafe(0),
-        maxHeight: "min(52vh, 420px)",
       }}
       role="region"
       aria-label="Talk to Paris"
@@ -85,7 +97,25 @@ export function ConversationalPanel() {
       >
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-3 lp-scroll">
           <AnimatePresence mode="popLayout">
-            {!hasSent && !isThinking && (
+            {expanded && routePreviewPlaying && (
+              <motion.p
+                key="living-hint"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-3 rounded-2xl px-3.5 py-2.5"
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: "var(--accent-text)",
+                  background: "var(--accent-tint)",
+                  border: "1px solid var(--accent-line)",
+                }}
+              >
+                I'm walking you through each place — ask me anything below.
+              </motion.p>
+            )}
+
+            {!hasSent && !isThinking && !expanded && (
               <motion.p
                 key="welcome"
                 initial={{ opacity: 0 }}
@@ -255,10 +285,11 @@ export function ConversationalPanel() {
             }}
           >
             <input
+              ref={inputRef}
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Talk to Paris…"
+              placeholder={expanded ? "Ask Paris anything while we walk…" : "Talk to Paris…"}
               aria-label="Talk to Paris"
               disabled={isThinking}
               className="min-w-0 flex-1 bg-transparent outline-none disabled:opacity-50"

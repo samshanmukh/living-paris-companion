@@ -1,4 +1,5 @@
 import type { MoodType } from "./types";
+import { moodMapStyleVars } from "./moodMap";
 
 export interface MoodTheme {
   solid: string;
@@ -29,5 +30,6 @@ export function moodStyleVars(mood: MoodType): React.CSSProperties {
     ["--accent" as string]: t.solid,
     ["--accent-text" as string]: t.text,
     ["--accent-tint" as string]: t.tint,
+    ...moodMapStyleVars(mood),
   };
 }

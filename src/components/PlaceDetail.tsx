@@ -36,7 +36,13 @@ export function PlaceDetail() {
   }, [selected, clearSelection]);
 
   const onStart = () => {
-    if (selected) void routeToPlace(selected);
+    if (!selected) return;
+    const geo = useCityStore.getState().geojson;
+    if (geo && geo.features.length >= 2) {
+      void useCityStore.getState().startRoute();
+    } else {
+      void routeToPlace(selected);
+    }
     clearSelection();
   };
 
@@ -169,7 +175,7 @@ export function PlaceDetail() {
                 }}
               >
                 <Navigation size={15} strokeWidth={2} />
-                Start route
+                Live this one
               </motion.button>
             </div>
           </motion.div>

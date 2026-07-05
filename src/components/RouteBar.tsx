@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ChevronLeft, ChevronRight, Footprints, Map, Navigation, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Map, Sparkles, X } from "lucide-react";
 import { useCityStore } from "@/store/useCityStore";
+import { useUIStore } from "@/store/useUIStore";
 
-/** Floating route controls — plan, navigate stops, overview. */
+/** Floating "Live this one" controls + walk-through navigation. */
 export function RouteBar() {
   const route = useCityStore((s) => s.route);
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
@@ -16,6 +17,9 @@ export function RouteBar() {
   const prevRouteStop = useCityStore((s) => s.prevRouteStop);
   const focusRouteOverview = useCityStore((s) => s.focusRouteOverview);
   const focusRouteStop = useCityStore((s) => s.focusRouteStop);
+  const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
+  const assistantExpanded = useUIStore((s) => s.assistantExpanded);
+  const panelExpanded = assistantExpanded || routePreviewPlaying;
 
   const stopCount = geojson?.features.length ?? 0;
   const hasPlan = stopCount >= 1;
@@ -41,9 +45,13 @@ export function RouteBar() {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
         className="pointer-events-auto fixed z-[45] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
-        style={{ bottom: "calc(min(52vh, 420px) + 12px + env(safe-area-inset-bottom))" }}
+        style={{
+          bottom: panelExpanded
+            ? "calc(min(58vh, 480px) + 12px + env(safe-area-inset-bottom))"
+            : "calc(min(46vh, 380px) + 12px + env(safe-area-inset-bottom))",
+        }}
       >
-        {route && navStops > 1 && (
+        {route && navStops > 1 && !routePreviewPlaying && (
           <div
             className="glass-strong flex items-center gap-1 rounded-full"
             style={{
@@ -56,7 +64,7 @@ export function RouteBar() {
               type="button"
               onClick={prevRouteStop}
               disabled={!canPrev}
-              aria-label="Previous stop"
+              aria-label="Previous place"
               className="grid size-8 place-items-center rounded-full disabled:opacity-35"
               style={{ color: "var(--ink)" }}
             >
@@ -69,7 +77,7 @@ export function RouteBar() {
               className="min-w-[140px] max-w-[220px] truncate px-2 text-center"
               style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}
             >
-              {activeRouteStop === 0 ? "Start" : currentWp?.name ?? `Stop ${activeRouteStop}`}
+              {currentWp?.name ?? `Place ${activeRouteStop + 1}`}
               <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>
                 {" "}· {activeRouteStop + 1}/{navStops}
               </span>
@@ -79,7 +87,7 @@ export function RouteBar() {
               type="button"
               onClick={nextRouteStop}
               disabled={!canNext}
-              aria-label="Next stop"
+              aria-label="Next place"
               className="grid size-8 place-items-center rounded-full disabled:opacity-35"
               style={{ color: "var(--ink)" }}
             >
@@ -91,7 +99,7 @@ export function RouteBar() {
             <button
               type="button"
               onClick={focusRouteOverview}
-              aria-label="Show full route"
+              aria-label="Show full walk"
               className="grid size-8 place-items-center rounded-full"
               style={{ color: "var(--accent-text)" }}
             >
@@ -117,7 +125,7 @@ export function RouteBar() {
           {routeError ? (
             <AlertCircle size={16} strokeWidth={2} style={{ color: "#C8503C", flexShrink: 0 }} />
           ) : (
-            <Footprints size={16} strokeWidth={2} style={{ color: "var(--accent-text)", flexShrink: 0 }} />
+            <Sparkles size={16} strokeWidth={2} style={{ color: "var(--accent-text)", flexShrink: 0 }} />
           )}
 
           {routeError ? (
@@ -148,16 +156,16 @@ export function RouteBar() {
             <>
               <div className="min-w-0 flex-1">
                 <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", lineHeight: 1.2 }}>
-                  {Math.round(route.durationMinutes)} min walk · {(route.distanceMeters / 1000).toFixed(1)} km
+                  Living this · {Math.round(route.durationMinutes)} min
                 </p>
                 <p className="truncate" style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500 }}>
-                  {wps.slice(1).map((w) => w.name).filter(Boolean).join(" → ") || `${stopCount} stops`}
+                  {wps.map((w) => w.name).filter(Boolean).join(" → ") || `${stopCount} places`}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={clearRoute}
-                aria-label="Clear route"
+                aria-label="End walkthrough"
                 className="grid size-8 shrink-0 place-items-center rounded-full"
                 style={{ background: "rgba(255,255,255,0.7)", color: "var(--ink-2)" }}
               >
@@ -168,10 +176,10 @@ export function RouteBar() {
             <>
               <div className="min-w-0 flex-1">
                 <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
-                  {stopCount === 1 ? "1 stop ready" : `${stopCount} stops ready`}
+                  {stopCount === 1 ? "One place picked" : `${stopCount} places picked`}
                 </p>
                 <p className="truncate" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-                  {planPreview || "Tap to draw your walking route"}
+                  {planPreview || "Walk through Paris with me"}
                 </p>
               </div>
               <motion.button
@@ -188,8 +196,8 @@ export function RouteBar() {
                   opacity: isRouting ? 0.7 : 1,
                 }}
               >
-                <Navigation size={14} strokeWidth={2.2} />
-                {isRouting ? "Routing…" : "Start route"}
+                <Sparkles size={14} strokeWidth={2.2} />
+                {isRouting ? "Opening…" : "Live this one"}
               </motion.button>
             </>
           )}

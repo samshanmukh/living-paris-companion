@@ -1,7 +1,17 @@
 import { useEffect } from "react";
 import type { MapRef } from "react-map-gl/mapbox";
 import { useCityStore } from "@/store/useCityStore";
-import { MAP_PADDING, bboxFromCoords } from "@/lib/mapCamera";
+import { useUIStore } from "@/store/useUIStore";
+import {
+  LIVE_PLACE_PITCH,
+  LIVE_PLACE_ZOOM,
+  MAP_PADDING,
+  PLACE_BEARING,
+  PLACE_ZOOM,
+  PLACES_OVERVIEW_MAX_ZOOM,
+  bboxFromCoords,
+} from "@/lib/mapCamera";
+import { moodMapProfile } from "@/lib/moodMap";
 
 /** Drives map camera from selection + route navigation. */
 export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: boolean, reduced: boolean) {
@@ -11,8 +21,13 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
   const mapFocusTick = useCityStore((s) => s.mapFocusTick);
   const route = useCityStore((s) => s.route);
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
+  const mood = useCityStore((s) => s.mood);
+  const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
 
-  // Always zoom when user picks a place.
+  const moodCam = moodMapProfile(mood);
+  const liveZoom = () =>
+    useUIStore.getState().assistantExpanded || routePreviewPlaying;
+
   useEffect(() => {
     if (!mapReady || !selected) return;
     const [lon, lat] = selected.geometry.coordinates as [number, number];
@@ -25,20 +40,19 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
         map.stop();
         map.flyTo({
           center: [lon, lat],
-          zoom: 17.6,
-          pitch: 65,
-          bearing: -8,
+          zoom: PLACE_ZOOM + moodCam.zoomOffset,
+          pitch: moodCam.pitch,
+          bearing: moodCam.bearing ?? PLACE_BEARING,
           padding: MAP_PADDING,
           duration,
-          curve: 1.5,
-          speed: 0.8,
+          curve: 1.45,
+          speed: 0.82,
           essential: true,
         });
       } catch { /* ignore */ }
     });
-  }, [selected, selectionTick, mapReady, reduced, mapRef]);
+  }, [selected, selectionTick, mapReady, reduced, mapRef, moodCam]);
 
-  // Route overview, step-through stops, and bulk place fits.
   useEffect(() => {
     if (!mapReady || !mapFocus) return;
     const map = mapRef.current?.getMap();
@@ -52,13 +66,13 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
           case "place": {
             map.flyTo({
               center: [mapFocus.lon, mapFocus.lat],
-              zoom: 17.6,
-              pitch: 65,
-              bearing: -8,
+              zoom: PLACE_ZOOM + moodCam.zoomOffset,
+              pitch: moodCam.pitch,
+              bearing: moodCam.bearing,
               padding: MAP_PADDING,
               duration,
-              curve: 1.5,
-              speed: 0.8,
+              curve: 1.45,
+              speed: 0.82,
               essential: true,
             });
             break;
@@ -66,11 +80,12 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
           case "route-stop": {
             const wp = routeWaypoints?.[mapFocus.stopIndex];
             if (!wp) return;
+            const live = liveZoom();
             map.flyTo({
               center: [wp.lon, wp.lat],
-              zoom: mapFocus.stopIndex === 0 ? 16.4 : 17.2,
-              pitch: 58,
-              bearing: -10,
+              zoom: (live ? LIVE_PLACE_ZOOM : mapFocus.stopIndex === 0 ? 17.2 : PLACE_ZOOM) + moodCam.zoomOffset,
+              pitch: live ? LIVE_PLACE_PITCH : moodCam.pitch - 4,
+              bearing: moodCam.bearing,
               padding: MAP_PADDING,
               duration,
               curve: 1.4,
@@ -85,7 +100,7 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
             const { minLon, minLat, maxLon, maxLat } = bboxFromCoords(coords);
             map.fitBounds(
               [[minLon, minLat], [maxLon, maxLat]],
-              { padding: MAP_PADDING, duration: duration * 0.75, maxZoom: 15.2 },
+              { padding: MAP_PADDING, duration: duration * 0.75, maxZoom: 16.2, pitch: moodCam.pitch - 8 },
             );
             break;
           }
@@ -94,7 +109,13 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
             const { minLon, minLat, maxLon, maxLat } = bboxFromCoords(mapFocus.coords);
             map.fitBounds(
               [[minLon, minLat], [maxLon, maxLat]],
-              { padding: MAP_PADDING, duration: duration * 0.85, maxZoom: 14.8 },
+              {
+                padding: MAP_PADDING,
+                duration: duration * 0.85,
+                maxZoom: PLACES_OVERVIEW_MAX_ZOOM,
+                pitch: moodCam.pitch - 6,
+                bearing: moodCam.bearing,
+              },
             );
             break;
           }
@@ -103,5 +124,5 @@ export function useMapCamera(mapRef: React.RefObject<MapRef | null>, mapReady: b
     };
 
     window.requestAnimationFrame(run);
-  }, [mapFocus, mapFocusTick, mapReady, reduced, route, routeWaypoints, mapRef]);
+  }, [mapFocus, mapFocusTick, mapReady, reduced, route, routeWaypoints, mapRef, moodCam]);
 }

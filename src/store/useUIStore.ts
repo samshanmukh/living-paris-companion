@@ -17,7 +17,9 @@ export type Destination = {
 
 interface UIState {
   chatOpen: boolean;
+  assistantExpanded: boolean;
   setChatOpen: (v: boolean) => void;
+  setAssistantExpanded: (v: boolean) => void;
   activePersona: PersonaKey | null;
   setActivePersona: (p: PersonaKey | null) => void;
   destination: Destination | null;
@@ -26,7 +28,9 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   chatOpen: false,
+  assistantExpanded: false,
   setChatOpen: (v) => set({ chatOpen: v }),
+  setAssistantExpanded: (v) => set({ assistantExpanded: v }),
   activePersona: null,
   setActivePersona: (p) => set({ activePersona: p }),
   destination: null,

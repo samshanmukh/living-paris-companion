@@ -2,6 +2,18 @@ import type { RouteWaypoint } from "./types";
 
 export const MAP_PADDING = { top: 88, bottom: 300, left: 48, right: 48 };
 
+/** Default place focus when tapping a marker. */
+export const PLACE_ZOOM = 18.45;
+export const PLACE_PITCH = 68;
+export const PLACE_BEARING = -12;
+
+/** Tighter zoom during "Live this one" walkthrough. */
+export const LIVE_PLACE_ZOOM = 19.15;
+export const LIVE_PLACE_PITCH = 70;
+
+/** When several stops share the frame, stay closer than city-wide overview. */
+export const PLACES_OVERVIEW_MAX_ZOOM = 17.1;
+
 export type MapFocus =
   | { kind: "place"; lon: number; lat: number }
   | { kind: "route-overview" }

@@ -29,31 +29,31 @@ export function suggestionsForMood(mood: MoodType): Suggestion[] {
       return [
         { label: "Add a bakery stop", prompt: "Add a great bakery stop to this route.", mood: "food" },
         { label: "Keep it rain-safe", prompt: "Make this plan work if it starts raining.", mood: "rainy" },
-        { label: "Start route", prompt: "Start route", action: "start-route", mood: "relaxing" },
+        { label: "Live this one", prompt: "Live this one", action: "start-route", mood: "relaxing" },
       ];
     case "food":
       return [
         { label: "Wine after dinner", prompt: "Add a natural-wine bar after dinner.", mood: "nightlife" },
         { label: "Family-friendly", prompt: "Make this family-friendly instead.", mood: "family" },
-        { label: "Start route", prompt: "Start route", action: "start-route", mood: "food" },
+        { label: "Live this one", prompt: "Live this one", action: "start-route", mood: "food" },
       ];
     case "nightlife":
       return [
         { label: "Safer walk home", prompt: "Route me home along well-lit streets after midnight.", mood: "nightlife" },
         { label: "Quieter option", prompt: "Something quieter — less of a scene.", mood: "relaxing" },
-        { label: "Start route", prompt: "Start route", action: "start-route", mood: "nightlife" },
+        { label: "Live this one", prompt: "Live this one", action: "start-route", mood: "nightlife" },
       ];
     case "rainy":
       return [
         { label: "Indoor only", prompt: "Indoor-only version of this plan.", mood: "rainy" },
         { label: "Covered passages", prompt: "Route through covered passages only.", mood: "rainy" },
-        { label: "Start route", prompt: "Start route", action: "start-route", mood: "rainy" },
+        { label: "Live this one", prompt: "Live this one", action: "start-route", mood: "rainy" },
       ];
     case "romantic":
       return [
         { label: "Sunset timing", prompt: "Time this for golden hour on the Seine.", mood: "photography" },
         { label: "Candlelit dinner", prompt: "Add a candlelit bistro.", mood: "food" },
-        { label: "Start route", prompt: "Start route", action: "start-route", mood: "romantic" },
+        { label: "Live this one", prompt: "Live this one", action: "start-route", mood: "romantic" },
       ];
     default:
       return DEFAULT_SUGGESTIONS;

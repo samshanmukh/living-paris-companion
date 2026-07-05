@@ -3,6 +3,9 @@ import { parseIntent, planRoute, spatialQuery } from "@/lib/api";
 import { mergeQuery, normalizeConciergeResponse } from "@/lib/concierge";
 import { executeMapActions } from "@/lib/executeMapActions";
 import { detectLocationCommand, geocodeParis, geolocateDevice } from "@/lib/geocode";
+import { waypointsFromFeatures } from "@/lib/routePreview";
+import { livingFollowUp } from "@/lib/livingPrompt";
+import { useUIStore } from "@/store/useUIStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { isRainFriendly } from "@/lib/rainMode";
@@ -140,7 +143,7 @@ function detectVoiceCommand(raw: string): {
   if (
     /\b(i like this|start\s+(?:the\s+)?(?:\w+\s+){0,3}route|start directions|take me|let'?s go|navigate|go there|book it|do it|begin (?:the )?walk|show (?:me )?(?:the )?route)\b/.test(t)
   )
-    return { kind: "start-route", reply: "On our way — drawing your route now." };
+    return { kind: "start-route", reply: "Let's live this one — I'll walk you through each stop." };
   if (/\b(make it night|it'?s night|after dark|nighttime)\b/.test(t))
     return { kind: "night", reply: "Turning down the lights." };
   if (/\b(dawn|sunrise|morning light)\b/.test(t))
@@ -175,6 +178,10 @@ interface CityState {
   selectionTick: number;
   highlightedIds: string[];
   mapAnnotation: MapAnnotation | null;
+  routePreviewPlaying: boolean;
+  routePreviewStop: number;
+  routePreviewProgress: number;
+  routePreviewGeneration: number;
   setHighlightedIds: (ids: string[]) => void;
   setMapAnnotation: (a: MapAnnotation | null) => void;
   setMoodFromAction: (mood: MoodType) => void;
@@ -195,6 +202,8 @@ interface CityState {
   prevRouteStop: () => void;
   startRoute: () => Promise<void>;
   clearRoute: () => void;
+  skipRoutePreview: () => void;
+  finishRoutePreview: () => void;
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -224,6 +233,10 @@ export const useCityStore = create<CityState>((set, get) => ({
   selectionTick: 0,
   highlightedIds: [],
   mapAnnotation: null,
+  routePreviewPlaying: false,
+  routePreviewStop: 0,
+  routePreviewProgress: 0,
+  routePreviewGeneration: 0,
 
   setHighlightedIds: (ids) => set({ highlightedIds: ids }),
   setMapAnnotation: (a) => set({ mapAnnotation: a }),
@@ -249,6 +262,19 @@ export const useCityStore = create<CityState>((set, get) => ({
   prevRouteStop: () => {
     const prev = Math.max(get().activeRouteStop - 1, 0);
     get().focusRouteStop(prev);
+  },
+
+  skipRoutePreview: () => {
+    set((s) => ({
+      routePreviewPlaying: false,
+      routePreviewGeneration: s.routePreviewGeneration + 1,
+      routePreviewProgress: 1,
+    }));
+    get().focusRouteOverview();
+  },
+
+  finishRoutePreview: () => {
+    set({ routePreviewPlaying: false, routePreviewProgress: 1 });
   },
 
   setLiveTranscript: (t) => set({ liveTranscript: t }),
@@ -475,15 +501,19 @@ export const useCityStore = create<CityState>((set, get) => ({
       { lon: start[0], lat: start[1], name: get().locationLabel ? `You · ${get().locationLabel}` : "Start" },
       { lon, lat, name: f.properties.name, id: f.properties.id },
     ];
+    useUIStore.getState().setAssistantExpanded(true);
     set({ isRouting: true, routeError: null });
     try {
       const route = await planRoute(waypoints);
-      set({
+      const followUp = livingFollowUp([f], get().mood, useTraitsStore.getState().profile.name);
+      set((s) => ({
         route,
         routeWaypoints: waypoints,
         activeRouteStop: 1,
-        lastChanged: [`Route · to ${f.properties.name}`],
-      });
+        messages: [...s.messages, { role: "ai", text: followUp }],
+        lastChanged: [`Living · ${f.properties.name}`],
+      }));
+      void speak(followUp);
       get().focusRouteStop(1);
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
@@ -500,9 +530,10 @@ export const useCityStore = create<CityState>((set, get) => ({
   },
 
   startRoute: async () => {
+    useUIStore.getState().setAssistantExpanded(true);
     const geo = get().geojson;
     if (geo && geo.features.length >= 2) {
-      await get().planItinerary(geo.features.slice(0, 3));
+      await get().planItinerary(geo.features);
       return;
     }
     if (geo?.features.length === 1) {
@@ -519,29 +550,45 @@ export const useCityStore = create<CityState>((set, get) => ({
     setTimeout(() => set({ routeError: null }), 4000);
   },
 
-  clearRoute: () => set({ route: null, routeWaypoints: null, routeError: null, activeRouteStop: 0 }),
+  clearRoute: () =>
+    set((s) => ({
+      route: null,
+      routeWaypoints: null,
+      routeError: null,
+      activeRouteStop: 0,
+      routePreviewPlaying: false,
+      routePreviewStop: 0,
+      routePreviewProgress: 0,
+      routePreviewGeneration: s.routePreviewGeneration + 1,
+    })),
 
   planItinerary: async (stops: ParisFeature[]) => {
-    if (stops.length < 1) return;
-    const start = get().userLocation ?? get().center;
-    const waypoints: RouteWaypoint[] = [
-      { lon: start[0], lat: start[1], name: get().locationLabel ? `You · ${get().locationLabel}` : "Start" },
-      ...stops.map((s) => {
-        const [lon, lat] = s.geometry.coordinates as [number, number];
-        return { lon, lat, name: s.properties.name, id: s.properties.id };
-      }),
-    ];
-    if (waypoints.length < 2) return;
+    if (stops.length < 2) {
+      if (stops.length === 1) await get().routeToPlace(stops[0]);
+      return;
+    }
+    const waypoints = waypointsFromFeatures(stops);
+    useUIStore.getState().setAssistantExpanded(true);
     set({ isRouting: true, routeError: null });
     try {
       const route = await planRoute(waypoints);
-      set({
+      const followUp = livingFollowUp(
+        stops,
+        get().mood,
+        useTraitsStore.getState().profile.name,
+      );
+      set((s) => ({
         route,
         routeWaypoints: waypoints,
         activeRouteStop: 0,
-        lastChanged: [`Route · ${stops.length} stops · ${Math.round(route.durationMinutes)} min`],
-      });
-      get().focusRouteOverview();
+        routePreviewStop: 0,
+        routePreviewProgress: 0,
+        routePreviewPlaying: true,
+        routePreviewGeneration: s.routePreviewGeneration + 1,
+        messages: [...s.messages, { role: "ai", text: followUp }],
+        lastChanged: [`Living · ${stops.length} places · ${Math.round(route.durationMinutes)} min`],
+      }));
+      void speak(followUp);
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
       set({
