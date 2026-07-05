@@ -1,0 +1,202 @@
+@import "tailwindcss" source(none);
+@import "mapbox-gl/dist/mapbox-gl.css";
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Living Paris — warm editorial glassmorphism */
+:root {
+  /* Paper surfaces */
+  --paper: #F4F0E8;
+  --paper-2: #FDFBF6;
+  --paper-3: #EFE9DD;
+
+  /* Ink */
+  --ink: #1C1A16;
+  --ink-2: #5C554A;
+  --ink-3: #938B7C;
+
+  /* Hairlines */
+  --line: rgba(28, 26, 22, 0.08);
+  --line-strong: rgba(28, 26, 22, 0.16);
+
+  /* Glass */
+  --glass: rgba(253, 251, 246, 0.62);
+  --glass-strong: rgba(253, 251, 246, 0.86);
+  --glass-blur: blur(26px) saturate(1.25);
+
+  /* Accent — dynamic per mood (set by JS on :root). Defaults to romantic. */
+  --accent: #C77E6A;
+  --accent-text: #8B4E3B;
+  --accent-tint: rgba(199, 126, 106, 0.14);
+  --accent-line: rgba(199, 126, 106, 0.32);
+
+  /* Radii */
+  --r-panel: 24px;
+  --r-card: 20px;
+  --r-control: 14px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-glass: 0 12px 40px rgba(60, 50, 30, 0.10);
+  --shadow-panel: 0 20px 60px rgba(60, 50, 30, 0.14);
+  --shadow-card: 0 8px 24px rgba(60, 50, 30, 0.08);
+  --shadow-soft: 0 2px 10px rgba(60, 50, 30, 0.06);
+
+  /* Motion */
+  --dur-fast: 0.25s;
+  --dur-base: 0.45s;
+  --dur-slow: 0.8s;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Shadcn compatibility */
+  --radius: 0.9rem;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper-2);
+  --card-foreground: var(--ink);
+  --popover: var(--paper-2);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper-2);
+  --secondary: var(--paper-3);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-3);
+  --muted-foreground: var(--ink-2);
+  --accent-shadcn: var(--paper-3);
+  --accent-foreground: var(--ink);
+  --destructive: #C25642;
+  --destructive-foreground: var(--paper-2);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--accent);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-accent-lp: var(--accent);
+  --color-accent-text: var(--accent-text);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-shadcn);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-serif: "Instrument Serif", "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-serif);
+}
+
+@utility glass {
+  background: rgba(253, 251, 246, 0.62);
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-glass);
+}
+
+@utility glass-strong {
+  background: rgba(253, 251, 246, 0.82);
+  backdrop-filter: blur(32px) saturate(1.4);
+  -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-glass);
+}
+
+@utility font-serif {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+@utility font-ui {
+  font-family: var(--font-sans);
+  letter-spacing: -0.005em;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+  html,
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button, a { transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out); }
+}
+
+/* Accent transition — retint when mood changes */
+:root {
+  transition:
+    --accent 0.55s var(--ease-out),
+    --accent-text 0.55s var(--ease-out),
+    --accent-tint 0.55s var(--ease-out);
+}
+
+@keyframes lp-pulse-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.55; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+
+@keyframes lp-dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Route dash animation (used by animated draw fallback) */
+@keyframes lp-dash {
+  to { stroke-dashoffset: -40; }
+}
+
+/* Mapbox controls: hide default attribution box + logo for cleaner canvas */
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+  opacity: 0.32;
+  filter: saturate(0);
+}
+
+/* Scrollbars */
+.lp-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.lp-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+.lp-scroll::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 120ms !important; }
+}
+
+.lp-calm * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 120ms !important;
+}
