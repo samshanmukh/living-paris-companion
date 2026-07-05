@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Marker as MapMarker, type MapRef } from "react-map-gl/mapbox";
 import { AnimatePresence } from "framer-motion";
 import { useCityStore } from "@/store/useCityStore";
@@ -20,11 +20,8 @@ import { useRoutePreview } from "@/hooks/useRoutePreview";
 import { MAP_PADDING } from "@/lib/mapCamera";
 import { MapFocusVeil } from "./MapFocusVeil";
 import { MapLayerErrorBoundary } from "./MapLayerErrorBoundary";
+import { MapSkyBirdsOverlay } from "./MapSkyBirdsOverlay";
 import { MapSunLayer } from "./MapSunLayer";
-
-const MapBirdsLayer = lazy(() =>
-  import("./MapBirdsLayer").then((m) => ({ default: m.MapBirdsLayer })),
-);
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -244,9 +241,9 @@ export function MapCanvas() {
         <MapLayerErrorBoundary name="sun">
           <MapSunLayer />
         </MapLayerErrorBoundary>
-        <Suspense fallback={null}>
-          <MapBirdsLayer />
-        </Suspense>
+        <MapLayerErrorBoundary name="birds">
+          <MapSkyBirdsOverlay />
+        </MapLayerErrorBoundary>
         <DemoLayers />
         <UserLocationMarker />
         <MapAnnotationMarker />

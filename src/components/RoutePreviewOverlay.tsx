@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMap } from "react-map-gl/mapbox";
 import { useCityStore } from "@/store/useCityStore";
+import { safeProject } from "@/lib/mapSafe";
 
 const CORE = "#C77E6A";
 
@@ -10,6 +11,16 @@ function trimPoints(points: string, progress: number): string {
   const pairs = points.trim().split(/\s+/);
   const keep = Math.max(2, Math.ceil(pairs.length * progress));
   return pairs.slice(0, keep).join(" ");
+}
+
+function isValidPointsString(points: string): boolean {
+  if (!points.trim()) return false;
+  return points.trim().split(/\s+/).every((pair) => {
+    const [x, y] = pair.split(",");
+    const nx = Number(x);
+    const ny = Number(y);
+    return Number.isFinite(nx) && Number.isFinite(ny);
+  });
 }
 
 /** Subtle dotted draw animation during route preview only — sits under markers. */
@@ -43,14 +54,14 @@ export function RoutePreviewOverlay() {
 
     const project = () => {
       if (cancelled) return;
-      setPoints(
-        coords
-          .map((c) => {
-            const p = map.project(c);
-            return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-          })
-          .join(" "),
-      );
+      const projected = coords
+        .map((c) => {
+          const p = safeProject(map, c);
+          if (!p) return null;
+          return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        })
+        .filter((p): p is string => p !== null);
+      setPoints(projected.length >= 2 ? projected.join(" ") : "");
     };
 
     const schedule = () => {
@@ -78,6 +89,7 @@ export function RoutePreviewOverlay() {
   if (!playing || !route || coords.length < 2 || !points || !portalTarget) return null;
 
   const visiblePoints = trimPoints(points, Math.max(0.02, progress));
+  if (!isValidPointsString(visiblePoints)) return null;
 
   return createPortal(
     <svg
