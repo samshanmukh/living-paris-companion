@@ -6,6 +6,7 @@ import { LivingParisBadge } from "@/components/LivingParisBadge";
 import { PipelineViz } from "@/components/PipelineViz";
 import { ConversationalPanel } from "@/components/ConversationalPanel";
 import { WhatChangedChips } from "@/components/WhatChangedChips";
+import { PlanCard } from "@/components/PlanCard";
 import { RouteBar } from "@/components/RouteBar";
 import { RoutePreviewCard } from "@/components/RoutePreviewCard";
 import { moodStyleVars } from "@/lib/moods";
@@ -69,7 +70,8 @@ function Index() {
         <RoutePreviewCard />
         <PipelineViz />
 
-        {/* Voice-first conversational sheet — suggestions + talk back */}
+        {/* Plan card + route controls sit above chat */}
+        <PlanCard />
         <RouteBar />
         <ConversationalPanel />
 

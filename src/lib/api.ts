@@ -93,7 +93,10 @@ export async function spatialQuery(intent: IntentQuery): Promise<SpatialQueryRes
 
   let picks = POIS.filter((p) => p.moods.includes(mood) || mood === "general");
 
-  if (intent.indoor) picks = picks.filter((p) => p.indoor);
+  if (intent.indoor || intent.mood === "rainy") {
+    const covered = picks.filter((p) => p.indoor || /museum|caf|coffee|food|chapelle|carnavalet|orangerie|shakespeare/i.test(`${p.layer} ${p.name}`));
+    if (covered.length >= 2) picks = covered;
+  }
   if (picks.length < 3) picks = POIS.slice();
 
   picks = picks

@@ -10,7 +10,6 @@ export function RouteBar() {
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
   const routeError = useCityStore((s) => s.routeError);
   const activeRouteStop = useCityStore((s) => s.activeRouteStop);
-  const geojson = useCityStore((s) => s.geojson);
   const isRouting = useCityStore((s) => s.isRouting);
   const startRoute = useCityStore((s) => s.startRoute);
   const clearRoute = useCityStore((s) => s.clearRoute);
@@ -23,20 +22,13 @@ export function RouteBar() {
   const assistantFullscreen = useUIStore((s) => s.assistantFullscreen);
   const panelSize = resolveChatPanelSize(assistantFullscreen, assistantExpanded, routePreviewPlaying);
 
-  const stopCount = geojson?.features.length ?? 0;
-  const hasPlan = stopCount >= 1;
-  const show = hasPlan || Boolean(route) || Boolean(routeError);
+  const show = Boolean(route) || Boolean(routeError);
 
   const wps = routeWaypoints ?? [];
   const navStops = wps.length;
   const canPrev = activeRouteStop > 0;
   const canNext = activeRouteStop < navStops - 1;
   const currentWp = wps[activeRouteStop];
-
-  const planPreview = (geojson?.features ?? [])
-    .slice(0, 3)
-    .map((f) => f.properties.name)
-    .join(" → ");
 
   if (!show) return null;
 
@@ -152,14 +144,14 @@ export function RouteBar() {
                 Retry
               </motion.button>
             </>
-          ) : route ? (
+          ) : (
             <>
               <div className="min-w-0 flex-1">
                 <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", lineHeight: 1.2 }}>
-                  Living this · {Math.round(route.durationMinutes)} min
+                  Living this · {Math.round(route!.durationMinutes)} min
                 </p>
                 <p className="truncate" style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500 }}>
-                  {wps.map((w) => w.name).filter(Boolean).join(" → ") || `${stopCount} places`}
+                  {wps.map((w) => w.name).filter(Boolean).join(" → ") || `${navStops} places`}
                 </p>
               </div>
               <button
@@ -171,34 +163,6 @@ export function RouteBar() {
               >
                 <X size={14} strokeWidth={2} />
               </button>
-            </>
-          ) : (
-            <>
-              <div className="min-w-0 flex-1">
-                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
-                  {stopCount === 1 ? "One place picked" : `${stopCount} places picked`}
-                </p>
-                <p className="truncate" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-                  {planPreview || "Walk through Paris with me"}
-                </p>
-              </div>
-              <motion.button
-                type="button"
-                onClick={() => void startRoute()}
-                disabled={isRouting}
-                whileTap={{ scale: 0.96 }}
-                className="flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2"
-                style={{
-                  background: "linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 72%, black))",
-                  color: "var(--paper-2)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  opacity: isRouting ? 0.7 : 1,
-                }}
-              >
-                <Sparkles size={14} strokeWidth={2.2} />
-                {isRouting ? "Opening…" : "Live this one"}
-              </motion.button>
             </>
           )}
         </div>

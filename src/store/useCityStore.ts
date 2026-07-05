@@ -9,6 +9,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { isRainFriendly } from "@/lib/rainMode";
+import { refinePlacesForIntent } from "@/lib/placeSearch";
 import type { MapFocus } from "@/lib/mapCamera";
 import type {
   IntentQuery,
@@ -432,9 +433,21 @@ export const useCityStore = create<CityState>((set, get) => ({
 
       const geojson = result?.geojson ?? get().geojson;
       const mapCenter = userLoc ?? result?.meta.center ?? get().center;
+      const rainFromActions = actions.some((a) => a.type === "relight" && a.rain === true);
+      const sourceFeatures = geojson?.features ?? [];
+      const refinedFeatures = sourceFeatures.length
+        ? refinePlacesForIntent(sourceFeatures, mergedQuery, {
+            rainMode: get().rainMode || rainFromActions || mergedQuery.mood === "rainy",
+            accessibleMode: get().accessibleMode,
+            center: mapCenter,
+          })
+        : [];
+      const refinedGeojson = geojson
+        ? { ...geojson, features: refinedFeatures, type: "FeatureCollection" as const }
+        : null;
 
       if (actions.length) {
-        await executeMapActions(actions, geojson, {
+        await executeMapActions(actions, refinedGeojson, {
           setMapFocus: get().setMapFocus,
           startRoute: (opts) => get().startRoute(opts),
           select: get().select,
@@ -446,15 +459,18 @@ export const useCityStore = create<CityState>((set, get) => ({
       }
 
       const rainOn = get().rainMode;
-      const places = (geojson?.features ?? []).slice(0, 4);
+      const places = refinedFeatures.slice(0, 4);
       const nextMood: MoodType = mergedQuery.mood ?? get().mood;
       const choreographed = actions.some((a) => a.type === "flyTo" || a.type === "highlight");
 
       set((s) => ({
         mood: nextMood,
-        ...(result
+        ...(result || refinedFeatures.length
           ? {
-              geojson: result.geojson,
+              geojson: {
+                type: "FeatureCollection" as const,
+                features: refinedFeatures,
+              },
               center: mapCenter,
               route: null,
               routeWaypoints: null,
@@ -465,8 +481,8 @@ export const useCityStore = create<CityState>((set, get) => ({
         isThinking: false,
         pipelineStep: 0,
         messages: [...s.messages, { role: "ai", text: reply, places: result ? places : undefined }],
-        lastChanged: result
-          ? diffLabels(prevMood, nextMood, prevCount, geojson?.features.length ?? 0, rainOn)
+        lastChanged: result || refinedFeatures.length
+          ? diffLabels(prevMood, nextMood, prevCount, refinedFeatures.length, rainOn)
           : [],
       }));
 
