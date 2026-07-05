@@ -9,6 +9,7 @@ import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { MOOD_THEMES } from "@/lib/moods";
 import { CHAT_PANEL_HEIGHT, resolveChatPanelSize } from "@/lib/chatPanel";
 import { SuggestionChips } from "./SuggestionChips";
+import { ExperienceCarousel } from "./ExperienceCarousel";
 import { bottomSafe } from "@/lib/layout";
 import type { ParisFeature } from "@/lib/types";
 
@@ -127,6 +128,8 @@ export function ConversationalPanel() {
   const stickToBottomRef = useRef(true);
 
   const messages = useCityStore((s) => s.messages);
+  const geojson = useCityStore((s) => s.geojson);
+  const route = useCityStore((s) => s.route);
   const mood = useCityStore((s) => s.mood);
   const isThinking = useCityStore((s) => s.isThinking);
   const pipelineStep = useCityStore((s) => s.pipelineStep);
@@ -147,6 +150,7 @@ export function ConversationalPanel() {
   const panelHeight = CHAT_PANEL_HEIGHT[panelSize];
   const learned = learnedLine(traits);
   const lastAiIndex = messages.reduce((acc, m, i) => (m.role === "ai" ? i : acc), -1);
+  const showExperienceCards = (geojson?.features.length ?? 0) >= 2 && !route && !routePreviewPlaying;
 
   const syncScroll = (force = false) => {
     const el = scrollRef.current;
@@ -287,7 +291,7 @@ export function ConversationalPanel() {
                 <AIBubble
                   key={messageKey(m, i)}
                   text={m.text}
-                  places={m.places}
+                  places={showExperienceCards && i === lastAiIndex ? undefined : m.places}
                   learned={i === lastAiIndex ? learned : null}
                   compactPlaces={i !== lastAiIndex}
                 />
@@ -330,6 +334,8 @@ export function ConversationalPanel() {
               </motion.p>
             )}
           </AnimatePresence>
+
+          <ExperienceCarousel />
 
           {!isThinking && (
             <div className="mt-2">

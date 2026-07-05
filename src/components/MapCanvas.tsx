@@ -22,6 +22,8 @@ import { MapFocusVeil } from "./MapFocusVeil";
 import { MapLayerErrorBoundary } from "./MapLayerErrorBoundary";
 import { MapSkyBirdsOverlay } from "./MapSkyBirdsOverlay";
 import { MapSunLayer } from "./MapSunLayer";
+import { ExperienceRoutePreview } from "./ExperienceRoutePreview";
+import { buildItineraries } from "@/lib/itinerary";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -46,9 +48,14 @@ const LAUNCH_VIEW = {
 
 export function MapCanvas() {
   const geojson = useCityStore((s) => s.geojson);
+  const mood = useCityStore((s) => s.mood);
+  const rainMode = useCityStore((s) => s.rainMode);
+  const center = useCityStore((s) => s.center);
+  const route = useCityStore((s) => s.route);
+  const routePreviewPlaying = useCityStore((s) => s.routePreviewPlaying);
+  const activeExperienceIndex = useCityStore((s) => s.activeExperienceIndex);
   const selected = useCityStore((s) => s.selected);
   const select = useCityStore((s) => s.select);
-  const rainMode = useCityStore((s) => s.rainMode);
   const hourOverride = useSceneStore((s) => s.hourOverride);
   const seasonOverride = useSceneStore((s) => s.seasonOverride);
   const rainOverride = useSceneStore((s) => s.rainOverride);
@@ -153,7 +160,16 @@ export function MapCanvas() {
     } catch {}
   }, [conditions, mapReady, hourOverride, seasonOverride, rainOverride, rainMode]);
 
-  const features = useMemo(() => geojson?.features ?? [], [geojson]);
+  const features = useMemo(() => {
+    if (route) return geojson?.features ?? [];
+    if (geojson?.features.length && geojson.features.length >= 2) {
+      const plans = buildItineraries(geojson.features, center, { mood, rainMode });
+      return plans[activeExperienceIndex]?.stops ?? geojson.features;
+    }
+    return geojson?.features ?? [];
+  }, [geojson, center, mood, rainMode, route, activeExperienceIndex]);
+
+  const browsingPlan = !route && !routePreviewPlaying && (geojson?.features.length ?? 0) >= 2;
 
   const onMapLoad = () => {
     const map = mapRef.current?.getMap?.();
@@ -243,6 +259,7 @@ export function MapCanvas() {
               <RouteLineLayer />
             </MapLayerErrorBoundary>
             <RoutePreviewOverlay />
+            <ExperienceRoutePreview />
             <MapLayerErrorBoundary name="aqi">
               <AirQualityLayer />
             </MapLayerErrorBoundary>
@@ -268,6 +285,7 @@ export function MapCanvas() {
                 <ParisMarker
                   feature={f}
                   index={i}
+                  planStopNumber={browsingPlan ? i + 1 : undefined}
                   selected={selected?.properties.id === f.properties.id}
                   onClick={() => select(f)}
                 />

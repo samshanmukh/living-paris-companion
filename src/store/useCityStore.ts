@@ -5,6 +5,7 @@ import { executeMapActions } from "@/lib/executeMapActions";
 import { detectLocationCommand, geocodeParis, geolocateDevice } from "@/lib/geocode";
 import { waypointsFromFeatures } from "@/lib/routePreview";
 import { livingFollowUp } from "@/lib/livingPrompt";
+import { buildItineraries } from "@/lib/itinerary";
 import { useUIStore } from "@/store/useUIStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
@@ -191,6 +192,7 @@ interface CityState {
   routePreviewStop: number;
   routePreviewProgress: number;
   routePreviewGeneration: number;
+  activeExperienceIndex: number;
   setHighlightedIds: (ids: string[]) => void;
   setMapAnnotation: (a: MapAnnotation | null) => void;
   setMoodFromAction: (mood: MoodType) => void;
@@ -213,6 +215,8 @@ interface CityState {
   clearRoute: () => void;
   skipRoutePreview: () => void;
   finishRoutePreview: () => void;
+  setActiveExperienceIndex: (index: number) => void;
+  focusExperience: (index?: number) => void;
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -246,6 +250,7 @@ export const useCityStore = create<CityState>((set, get) => ({
   routePreviewStop: 0,
   routePreviewProgress: 0,
   routePreviewGeneration: 0,
+  activeExperienceIndex: 0,
 
   setHighlightedIds: (ids) => set({ highlightedIds: ids }),
   setMapAnnotation: (a) => set({ mapAnnotation: a }),
@@ -284,6 +289,26 @@ export const useCityStore = create<CityState>((set, get) => ({
 
   finishRoutePreview: () => {
     set({ routePreviewPlaying: false, routePreviewProgress: 1 });
+  },
+
+  setActiveExperienceIndex: (index) => set({ activeExperienceIndex: index }),
+
+  focusExperience: (index) => {
+    const geo = get().geojson;
+    if (!geo?.features.length) return;
+    const idx = index ?? get().activeExperienceIndex;
+    const plans = buildItineraries(geo.features, get().center, {
+      mood: get().mood,
+      rainMode: get().rainMode,
+    });
+    const stops = plans[idx]?.stops ?? geo.features.slice(0, 4);
+    set({ activeExperienceIndex: idx, highlightedIds: stops.map((s) => s.properties.id) });
+    const coords = stops.map((f) => f.geometry.coordinates as [number, number]);
+    if (coords.length >= 2) {
+      get().setMapFocus({ kind: "places-overview", coords });
+    } else if (coords.length === 1) {
+      get().setMapFocus({ kind: "place", lon: coords[0][0], lat: coords[0][1] });
+    }
   },
 
   setLiveTranscript: (t) => set({ liveTranscript: t }),
@@ -476,6 +501,7 @@ export const useCityStore = create<CityState>((set, get) => ({
               routeWaypoints: null,
               routeError: null,
               selected: null,
+              activeExperienceIndex: 0,
             }
           : {}),
         isThinking: false,
@@ -489,7 +515,9 @@ export const useCityStore = create<CityState>((set, get) => ({
       setTimeout(() => set({ lastChanged: [] }), 3200);
       void speak(reply);
 
-      if (result && !choreographed) {
+      if (refinedFeatures.length) {
+        get().focusExperience(0);
+      } else if (result && !choreographed) {
         const placeCoords = places
           .map((f) => f.geometry.coordinates as [number, number])
           .filter((c) => c.length === 2);
@@ -557,13 +585,20 @@ export const useCityStore = create<CityState>((set, get) => ({
   startRoute: async (opts: RouteOptions = {}) => {
     useUIStore.getState().setAssistantExpanded(true);
     const geo = get().geojson;
-    if (geo && geo.features.length >= 2) {
-      await get().planItinerary(geo.features, opts);
-      return;
-    }
-    if (geo?.features.length === 1) {
-      await get().routeToPlace(geo.features[0], opts);
-      return;
+    if (geo?.features.length) {
+      const plans = buildItineraries(geo.features, get().center, {
+        mood: get().mood,
+        rainMode: get().rainMode,
+      });
+      const active = plans[get().activeExperienceIndex]?.stops ?? geo.features;
+      if (active.length >= 2) {
+        await get().planItinerary(active, opts);
+        return;
+      }
+      if (active.length === 1) {
+        await get().routeToPlace(active[0], opts);
+        return;
+      }
     }
     const selected = get().selected;
     if (selected) {

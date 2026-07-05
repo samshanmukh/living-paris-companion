@@ -7,11 +7,12 @@ import type { ParisFeature } from "@/lib/types";
 interface Props {
   feature: ParisFeature;
   index: number;
+  planStopNumber?: number;
   selected: boolean;
   onClick: () => void;
 }
 
-export function ParisMarker({ feature, index, selected, onClick }: Props) {
+export function ParisMarker({ feature, index, planStopNumber, selected, onClick }: Props) {
   const hoveredId = useCityStore((s) => s.hoveredId);
   const hover = useCityStore((s) => s.hover);
   const rainMode = useCityStore((s) => s.rainMode);
@@ -28,6 +29,7 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
   const onRoute = stopIndex >= 0;
   const isActiveStop = stopIndex === activeRouteStop && stopIndex >= 0;
   const showRouteBadge = onRoute;
+  const showPlanBadge = !showRouteBadge && planStopNumber != null;
   const placeCount = geojson?.features.length ?? 0;
   const { title, subtitle } = markerLabel(feature, mood, index);
   const showLabel = dim > 0.4 && (placeCount <= 5 || active || onRoute);
@@ -84,6 +86,21 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
         aria-label={feature.properties.name}
         style={{ background: "transparent", border: 0, padding: 0 }}
       >
+        {showPlanBadge && (
+          <span
+            className="absolute -top-1 -right-1 z-10 grid place-items-center rounded-full font-bold"
+            style={{
+              width: 18,
+              height: 18,
+              fontSize: 10,
+              background: index === 0 ? "var(--ink)" : index === 1 ? "var(--accent)" : "#5E8A62",
+              color: "var(--paper-2)",
+              boxShadow: "0 2px 6px rgba(28,26,22,0.2)",
+            }}
+          >
+            {planStopNumber}
+          </span>
+        )}
         {showRouteBadge && (
           <span
             className="absolute -top-1 -right-1 z-10 grid place-items-center rounded-full font-bold"
