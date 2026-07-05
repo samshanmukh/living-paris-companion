@@ -8,7 +8,9 @@ import { TRAIT_LABELS, type Trait } from "@/lib/traitsExtractor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { MOOD_THEMES } from "@/lib/moods";
 import { CHAT_PANEL_HEIGHT, resolveChatPanelSize } from "@/lib/chatPanel";
+import { returnVisitorGreeting } from "@/lib/returnVisitor";
 import { SuggestionChips } from "./SuggestionChips";
+import { PersonaNeedChips } from "./PersonaNeedChips";
 import { ExperienceCarousel } from "./ExperienceCarousel";
 import { bottomSafe } from "@/lib/layout";
 import type { ParisFeature } from "@/lib/types";
@@ -139,10 +141,12 @@ export function ConversationalPanel() {
   const send = useCityStore((s) => s.send);
   const assistantExpanded = useUIStore((s) => s.assistantExpanded);
   const assistantFullscreen = useUIStore((s) => s.assistantFullscreen);
+  const mapFlyInComplete = useUIStore((s) => s.mapFlyInComplete);
   const setAssistantExpanded = useUIStore((s) => s.setAssistantExpanded);
   const toggleAssistantFullscreen = useUIStore((s) => s.toggleAssistantFullscreen);
   const traits = useTraitsStore((s) => s.traits);
   const guestName = useTraitsStore((s) => s.profile.name);
+  const turns = useTraitsStore((s) => s.turns);
 
   const { listening, toggle: toggleMic } = useVoiceInput();
 
@@ -151,6 +155,13 @@ export function ConversationalPanel() {
   const learned = learnedLine(traits);
   const lastAiIndex = messages.reduce((acc, m, i) => (m.role === "ai" ? i : acc), -1);
   const showExperienceCards = (geojson?.features.length ?? 0) >= 2 && !route && !routePreviewPlaying;
+  const returnGreeting = returnVisitorGreeting(turns, guestName);
+
+  useEffect(() => {
+    if (mapFlyInComplete && !hasSent) {
+      setAssistantExpanded(true);
+    }
+  }, [mapFlyInComplete, hasSent, setAssistantExpanded]);
 
   const syncScroll = (force = false) => {
     const el = scrollRef.current;
@@ -187,9 +198,18 @@ export function ConversationalPanel() {
 
   return (
     <motion.section
-      initial={{ y: 40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1, maxHeight: panelHeight }}
-      transition={{ type: "spring", stiffness: 220, damping: 28, delay: 0.15 }}
+      initial={{ y: 48, opacity: 0 }}
+      animate={{
+        y: mapFlyInComplete ? 0 : 48,
+        opacity: mapFlyInComplete ? 1 : 0,
+        maxHeight: panelHeight,
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 220,
+        damping: 28,
+        delay: mapFlyInComplete ? 0.08 : 0,
+      }}
       className="pointer-events-auto fixed z-50 inset-x-0 flex flex-col"
       style={{
         bottom: 0,
@@ -279,10 +299,16 @@ export function ConversationalPanel() {
                 className="font-serif leading-snug"
                 style={{ fontSize: 22, color: "var(--ink)", marginBottom: 16 }}
               >
-                {guestName ? `${guestName} — ` : ""}
-                {MOOD_THEMES[mood]?.line ?? MOOD_THEMES.general.line}
+                {returnGreeting ?? (
+                  <>
+                    {guestName ? `${guestName} — ` : ""}
+                    {MOOD_THEMES[mood]?.line ?? MOOD_THEMES.general.line}
+                  </>
+                )}
               </motion.p>
             )}
+
+            {!hasSent && !isThinking && <PersonaNeedChips />}
 
             {messages.map((m, i) =>
               m.role === "user" ? (

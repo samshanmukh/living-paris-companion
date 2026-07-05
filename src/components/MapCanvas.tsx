@@ -3,7 +3,8 @@ import Map, { Marker as MapMarker, type MapRef } from "react-map-gl/mapbox";
 import { AnimatePresence } from "framer-motion";
 import { useCityStore } from "@/store/useCityStore";
 import { usePrefsStore } from "@/store/usePrefsStore";
-import { useSceneStore } from "@/store/useSceneStore";
+import { useSceneStore, type Season } from "@/store/useSceneStore";
+import { useUIStore } from "@/store/useUIStore";
 import { ParisMarker } from "./Marker";
 import { MapAnnotationMarker } from "./MapAnnotationMarker";
 import { RouteLineLayer, RouteStopMarkers } from "./RouteLayer";
@@ -16,7 +17,7 @@ import { MapControls } from "./MapControls";
 import { fetchParisConditions, resolveLightPreset, type ParisConditions } from "@/lib/parisWeather";
 import { useMapCamera } from "@/hooks/useMapCamera";
 import { useMoodMap } from "@/hooks/useMoodMap";
-import { useRoutePreview } from "@/hooks/useRoutePreview";
+import { registerLiveMap } from "@/lib/mapController";
 import { MAP_PADDING } from "@/lib/mapCamera";
 import { MapFocusVeil } from "./MapFocusVeil";
 import { MapLayerErrorBoundary } from "./MapLayerErrorBoundary";
@@ -24,6 +25,9 @@ import { MapSkyBirdsOverlay } from "./MapSkyBirdsOverlay";
 import { MapSunLayer } from "./MapSunLayer";
 import { ExperienceRoutePreview } from "./ExperienceRoutePreview";
 import { buildItineraries } from "@/lib/itinerary";
+import { moodFromParisHour } from "@/lib/moodFromHour";
+import { personaFogBoost } from "@/lib/personaDefaults";
+import { SeasonToggle } from "./SeasonToggle";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -46,6 +50,30 @@ const LAUNCH_VIEW = {
   bearing: -10,
 } as const;
 
+type FogSpec = {
+  color: string;
+  "high-color": string;
+  "horizon-blend": number;
+  "space-color": string;
+  "star-intensity": number;
+};
+
+function seasonFog(season: Season | null, base: FogSpec): FogSpec {
+  if (!season) return base;
+  switch (season) {
+    case "spring":
+      return { ...base, color: "rgb(236, 244, 232)", "high-color": "rgb(210, 228, 200)" };
+    case "summer":
+      return { ...base, color: "rgb(252, 244, 228)", "high-color": "rgb(240, 220, 180)" };
+    case "autumn":
+      return { ...base, color: "rgb(248, 236, 220)", "high-color": "rgb(210, 170, 120)" };
+    case "winter":
+      return { ...base, color: "rgb(232, 238, 248)", "high-color": "rgb(200, 210, 230)", "star-intensity": 0.12 };
+    default:
+      return base;
+  }
+}
+
 export function MapCanvas() {
   const geojson = useCityStore((s) => s.geojson);
   const mood = useCityStore((s) => s.mood);
@@ -60,6 +88,7 @@ export function MapCanvas() {
   const seasonOverride = useSceneStore((s) => s.seasonOverride);
   const rainOverride = useSceneStore((s) => s.rainOverride);
   const setParisConditions = useSceneStore((s) => s.setParisConditions);
+  const activePersona = useUIStore((s) => s.activePersona);
   const reduced = usePrefsStore((s) => s.reducedMotion);
   const mapRef = useRef<MapRef | null>(null);
   const [conditions, setConditions] = useState<ParisConditions | null>(null);
@@ -67,7 +96,11 @@ export function MapCanvas() {
 
   useMapCamera(mapRef, mapReady, reduced);
   useMoodMap(mapRef, mapReady, reduced);
-  useRoutePreview(mapRef, mapReady, reduced);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    return registerLiveMap(() => mapRef.current?.getMap());
+  }, [mapReady]);
 
   // Weather polling
   useEffect(() => {
@@ -87,6 +120,14 @@ export function MapCanvas() {
     return () => { cancelled = true; window.clearInterval(id); };
   }, [setParisConditions]);
 
+  // Mood-at-landing: default chat mood from live Paris hour before first message.
+  useEffect(() => {
+    if (!conditions) return;
+    const city = useCityStore.getState();
+    if (city.hasSent || city.mood !== "general") return;
+    city.setMoodFromAction(moodFromParisHour(conditions.localHour, conditions.lightPreset));
+  }, [conditions]);
+
   // Lighting + weather: live Paris conditions, with conversation-driven overrides only.
   useEffect(() => {
     if (!mapReady || !conditions) return;
@@ -102,29 +143,30 @@ export function MapCanvas() {
 
     try {
       if (preset === "night") {
+        const boost = personaFogBoost(activePersona);
         map.setFog({
-          color: "rgb(18, 20, 32)",
-          "high-color": "rgb(35, 38, 52)",
-          "horizon-blend": 0.12,
+          color: `rgb(${18 + boost * 120}, ${20 + boost * 120}, ${32 + boost * 80})`,
+          "high-color": `rgb(${35 + boost * 100}, ${38 + boost * 100}, ${52 + boost * 60})`,
+          "horizon-blend": 0.12 + boost,
           "space-color": "rgb(12, 14, 24)",
           "star-intensity": 0.35,
         });
       } else if (preset === "dusk") {
-        map.setFog({
+        map.setFog(seasonFog(seasonOverride, {
           color: "rgb(55, 48, 42)",
           "high-color": "rgb(120, 90, 70)",
           "horizon-blend": 0.14,
           "space-color": "rgb(40, 35, 50)",
           "star-intensity": 0.08,
-        });
+        }));
       } else {
-        map.setFog({
+        map.setFog(seasonFog(seasonOverride, {
           color: "rgb(244, 240, 232)",
           "high-color": "rgb(220, 220, 224)",
           "horizon-blend": 0.08,
           "space-color": "rgb(220, 220, 224)",
           "star-intensity": 0,
-        });
+        }));
       }
     } catch {}
 
@@ -158,7 +200,7 @@ export function MapCanvas() {
         anyMap.setSnow?.(null);
       }
     } catch {}
-  }, [conditions, mapReady, hourOverride, seasonOverride, rainOverride, rainMode]);
+  }, [conditions, mapReady, hourOverride, seasonOverride, rainOverride, rainMode, activePersona]);
 
   const features = useMemo(() => {
     if (route) return geojson?.features ?? [];
@@ -201,6 +243,9 @@ export function MapCanvas() {
     if (map.isStyleLoaded()) markReady();
     else map.once("style.load", markReady);
 
+    registerLiveMap(() => mapRef.current?.getMap() ?? map);
+
+    const completeFlyIn = () => useUIStore.getState().setMapFlyInComplete(true);
     const target = LAUNCH_VIEW;
     if (reduced) {
       map.jumpTo({
@@ -210,6 +255,7 @@ export function MapCanvas() {
         bearing: target.bearing,
         padding: MAP_PADDING,
       });
+      completeFlyIn();
       return;
     }
 
@@ -225,6 +271,12 @@ export function MapCanvas() {
         speed: 0.72,
         essential: true,
       });
+      const onEnd = () => {
+        map.off("moveend", onEnd);
+        completeFlyIn();
+      };
+      map.once("moveend", onEnd);
+      window.setTimeout(completeFlyIn, 3600);
     }, 120);
   };
 
@@ -276,6 +328,7 @@ export function MapCanvas() {
         <MapAnnotationMarker />
         <RouteStopMarkers />
         <MapControls />
+        <SeasonToggle />
         <AnimatePresence>
           {features.map((f, i) => {
             const [lon, lat] = f.geometry.coordinates as [number, number];

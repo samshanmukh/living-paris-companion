@@ -18,10 +18,7 @@ const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ??
   (import.meta.env.NEXT_PUBLIC_MAPBOX_TOKEN as string | undefined);
 
-const API_BASE =
-  (import.meta.env.VITE_LIVING_PARIS_API as string | undefined) ??
-  "https://living-paris-api.living-paris.workers.dev";
-
+const REMOTE_API = import.meta.env.VITE_LIVING_PARIS_API as string | undefined;
 
 type POI = {
   id: string;
@@ -72,9 +69,9 @@ const km = (a: [number, number], b: [number, number]) => {
 };
 
 export async function spatialQuery(intent: IntentQuery): Promise<SpatialQueryResult> {
-  // Try the live Living Paris API first.
-  try {
-    const r = await fetch(`${API_BASE}/api/spatial/query`, {
+  if (REMOTE_API) {
+    try {
+      const r = await fetch(`${REMOTE_API}/api/spatial/query`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(intent),
@@ -83,8 +80,9 @@ export async function spatialQuery(intent: IntentQuery): Promise<SpatialQueryRes
       const data = (await r.json()) as SpatialQueryResult & { error?: string };
       if (!data.error && data.geojson?.features?.length) return data;
     }
-  } catch {
-    // network failure → fall back to local POIs
+    } catch {
+      // network failure → fall back to local POIs
+    }
   }
 
   const center: [number, number] = [intent.lon ?? 2.3522, intent.lat ?? 48.8566];
@@ -163,9 +161,10 @@ export async function planRoute(waypoints: RouteWaypoint[]): Promise<RouteRespon
     throw new Error("Mapbox token missing — add VITE_MAPBOX_TOKEN to .env");
   }
 
-  // Try the Living Paris API routes endpoint first.
-  try {
-    const r = await fetch(`${API_BASE}/api/routes`, {
+  // Optional remote routes API — otherwise Mapbox + straight-line fallback.
+  if (REMOTE_API) {
+    try {
+      const r = await fetch(`${REMOTE_API}/api/routes`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ waypoints, profile: "walking" }),
@@ -174,8 +173,9 @@ export async function planRoute(waypoints: RouteWaypoint[]): Promise<RouteRespon
       const data = (await r.json()) as RouteResponse & { error?: string };
       if (!data.error && data.geometry) return data;
     }
-  } catch {
-    // fall through to direct Mapbox
+    } catch {
+      // fall through to direct Mapbox
+    }
   }
 
   const coords = waypoints.map((w) => `${w.lon},${w.lat}`).join(";");

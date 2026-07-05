@@ -11,12 +11,11 @@ export function DemoOverlay() {
 
   return (
     <>
-      {/* Trigger — left column below persona menu */}
       <button
         onClick={toggle}
         className="glass-strong pointer-events-auto fixed z-30 inline-flex items-center gap-2"
         style={{
-          top: belowTopBar(),
+          top: belowTopBar(LAYOUT.personaBtn + 4),
           left: LAYOUT.inset,
           padding: "8px 12px",
           borderRadius: 999,

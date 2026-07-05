@@ -1,26 +1,11 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wind, Accessibility, Heart, Ear, Moon, Menu, X, Utensils } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useCityStore } from "@/store/useCityStore";
-import { useUIStore, type PersonaKey } from "@/store/useUIStore";
+import { useUIStore } from "@/store/useUIStore";
+import { PERSONAS } from "@/lib/personas";
+import { applyPersonaDefaults } from "@/lib/personaDefaults";
 import { LAYOUT, topSafe } from "@/lib/layout";
-
-type Persona = {
-  key: PersonaKey;
-  label: string;
-  Icon: LucideIcon;
-  prompt: string;
-};
-
-const PERSONAS: Persona[] = [
-  { key: "asthma",     label: "Asthma",       Icon: Wind,          prompt: "I have asthma. Plan a 45-min walk staying on streets with the cleanest air today (avoid rue de Rivoli, Bd Périphérique, Champs-Élysées). Prefer parks (Buttes-Chaumont, Monceau, Luxembourg) and pedestrian streets. Give me 3 specific stops with why each is low-pollution." },
-  { key: "wheelchair", label: "Wheelchair",   Icon: Accessibility, prompt: "I use a manual wheelchair. Give me 3 fully step-free places within 20 min of Châtelet, only via lift-equipped métro (14, or RER A/B/D with elevators). No cobblestone streets. List each venue's step-free entrance detail." },
-  { key: "sensory",    label: "Sensory",      Icon: Ear,           prompt: "I'm autistic and noise-sensitive. Give me 3 quiet spots today (under 55 dB): think Square du Vert-Galant, Musée de la Vie Romantique courtyard, Coulée verte René-Dumont. Route between them on backstreets, not boulevards." },
-  { key: "safety",     label: "Night safety", Icon: Moon,          prompt: "It's 11pm and I'm walking alone. Route me from where I am to Gare du Nord along the best-lit streets with venues still open (24h boulangeries, late bars). Avoid Château Rouge, Barbès, and unlit park edges. Name the streets." },
-  { key: "halal",      label: "Halal",        Icon: Utensils,      prompt: "I eat halal only. Give me 3 halal restaurants in Paris (11e, 10e, 18e), the nearest mosque or prayer room to each, and the next Maghrib prayer time window." },
-  { key: "date",       label: "Date night",   Icon: Heart,         prompt: "Plan a romantic date night tonight in the 11th or 4th: a natural-wine bar, a candlelit bistro (€€), and a quiet Seine walk to end. Walkable loop under 1.2 km. Name the specific venues." },
-];
 
 export function PersonaSidebar() {
   const [open, setOpen] = useState(false);
@@ -29,20 +14,19 @@ export function PersonaSidebar() {
   const send = useCityStore((s) => s.send);
   const setChatOpen = useUIStore((s) => s.setChatOpen);
 
-  const pick = (p: Persona) => {
+  const pick = (p: (typeof PERSONAS)[number]) => {
     setActivePersona(p.key);
+    applyPersonaDefaults(p.key);
     setOpen(false);
     setChatOpen(true);
     void send(p.prompt);
   };
-
 
   return (
     <div
       className="pointer-events-auto fixed z-40"
       style={{ top: topSafe(), left: LAYOUT.inset }}
     >
-      {/* Hamburger toggle */}
       <motion.button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -83,7 +67,6 @@ export function PersonaSidebar() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Expanded rail */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -104,6 +87,7 @@ export function PersonaSidebar() {
           >
             {PERSONAS.map((p, i) => {
               const isActive = active === p.key;
+              const Icon = p.Icon;
               return (
                 <motion.button
                   key={p.key}
@@ -133,7 +117,7 @@ export function PersonaSidebar() {
                       color: isActive ? "var(--paper-2)" : "var(--ink)",
                     }}
                   >
-                    <p.Icon size={15} strokeWidth={1.9} />
+                    <Icon size={15} strokeWidth={1.9} />
                   </span>
                   <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.005em" }}>
                     {p.label}

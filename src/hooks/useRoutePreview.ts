@@ -1,6 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import type { Map } from "mapbox-gl";
 import type { MapRef } from "react-map-gl/mapbox";
 import { useCityStore } from "@/store/useCityStore";
+import type { RouteWaypoint } from "@/lib/types";
+import { getRegisteredMap } from "@/lib/mapController";
 import { MAP_PADDING, LIVE_PLACE_PITCH, LIVE_PLACE_ZOOM, bboxFromCoords } from "@/lib/mapCamera";
 import { moodMapProfile } from "@/lib/moodMap";
 import {
@@ -10,8 +13,12 @@ import {
   bearingBetween,
   pause,
   routeProgressToStop,
-  waitForMapMoveEnd,
+  waitForCameraFlight,
 } from "@/lib/routePreview";
+
+function resolveMap(mapRef: React.RefObject<MapRef | null>): Map | null | undefined {
+  return mapRef.current?.getMap() ?? getRegisteredMap();
+}
 
 /** Cinematic stop-by-stop camera tour after a route is planned. */
 export function useRoutePreview(
@@ -21,27 +28,29 @@ export function useRoutePreview(
 ) {
   const generation = useCityStore((s) => s.routePreviewGeneration);
   const playing = useCityStore((s) => s.routePreviewPlaying);
-  const runningRef = useRef(false);
 
   useEffect(() => {
     if (!mapReady || !playing) return;
-    const map = mapRef.current?.getMap();
-    const route = useCityStore.getState().route;
-    const waypoints = useCityStore.getState().routeWaypoints;
-    if (!map || !route?.geometry || !waypoints?.length) return;
 
-    const coords = route.geometry.geometry.coordinates as [number, number][];
+    let cancelled = false;
     const gen = generation;
-    runningRef.current = true;
-
     const flyMs = reduced ? 420 : ROUTE_PREVIEW_FLY_MS;
     const pauseMs = reduced ? 900 : ROUTE_PREVIEW_PAUSE_MS;
+    const overviewMs = reduced ? 400 : ROUTE_PREVIEW_OVERVIEW_MS;
+
+    const map = resolveMap(mapRef);
+    const route = useCityStore.getState().route;
+    const waypoints = useCityStore.getState().routeWaypoints;
+    if (!map || !route?.geometry?.geometry || !waypoints?.length) return;
+
+    const coords = route.geometry.geometry.coordinates as [number, number][];
 
     void (async () => {
       try {
         map.stop();
 
         for (let i = 0; i < waypoints.length; i++) {
+          if (cancelled) break;
           if (!useCityStore.getState().routePreviewPlaying) break;
           if (useCityStore.getState().routePreviewGeneration !== gen) break;
 
@@ -70,13 +79,14 @@ export function useRoutePreview(
             essential: true,
           });
 
-          await waitForMapMoveEnd(map, flyMs + 400);
+          await waitForCameraFlight(map, flyMs);
           if (!useCityStore.getState().routePreviewPlaying) break;
           if (useCityStore.getState().routePreviewGeneration !== gen) break;
-          await pause(pauseMs);
+          if (i < waypoints.length - 1) await pause(pauseMs);
         }
 
         if (
+          !cancelled &&
           useCityStore.getState().routePreviewPlaying &&
           useCityStore.getState().routePreviewGeneration === gen
         ) {
@@ -85,28 +95,27 @@ export function useRoutePreview(
             [[minLon, minLat], [maxLon, maxLat]],
             {
               padding: MAP_PADDING,
-              duration: reduced ? 400 : ROUTE_PREVIEW_OVERVIEW_MS,
+              duration: overviewMs,
               maxZoom: 15.4,
               pitch: 52,
               bearing: -8,
             },
           );
-          await waitForMapMoveEnd(map, ROUTE_PREVIEW_OVERVIEW_MS + 300);
+          await waitForCameraFlight(map, overviewMs);
           useCityStore.setState({
             routePreviewProgress: 1,
             activeRouteStop: 0,
           });
         }
       } finally {
-        runningRef.current = false;
-        if (useCityStore.getState().routePreviewGeneration === gen) {
+        if (!cancelled && useCityStore.getState().routePreviewGeneration === gen) {
           useCityStore.getState().finishRoutePreview();
         }
       }
     })();
 
     return () => {
-      runningRef.current = false;
+      cancelled = true;
     };
   }, [mapReady, playing, generation, reduced, mapRef]);
 }

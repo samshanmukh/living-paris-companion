@@ -5,14 +5,20 @@ import { executeMapActions } from "@/lib/executeMapActions";
 import { detectLocationCommand, geocodeParis, geolocateDevice } from "@/lib/geocode";
 import { waypointsFromFeatures } from "@/lib/routePreview";
 import { livingFollowUp } from "@/lib/livingPrompt";
+import { saveLastPlan } from "@/lib/returnVisitor";
 import { buildItineraries } from "@/lib/itinerary";
 import { useUIStore } from "@/store/useUIStore";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
+import { usePrefsStore } from "@/store/usePrefsStore";
 import { isRainFriendly } from "@/lib/rainMode";
 import { refinePlacesForIntent } from "@/lib/placeSearch";
 import { resolveConversationChips } from "@/lib/conversationChips";
 import { applySuggestionEffects } from "@/lib/applySuggestion";
+import { applyMapFocus } from "@/lib/mapController";
+import { startRoutePreviewTour } from "@/lib/routePreviewTour";
+import type { MapFocusContext } from "@/lib/executeMapFocus";
+import { moodMapProfile } from "@/lib/moodMap";
 import type { Suggestion } from "@/lib/suggestions";
 import type { MapFocus } from "@/lib/mapCamera";
 import type {
@@ -225,6 +231,43 @@ interface CityState {
   pickSuggestion: (chip: Suggestion) => Promise<void>;
 }
 
+function liveMapFocusContext(getState: () => CityState): MapFocusContext {
+  const state = getState();
+  const ui = useUIStore.getState();
+  return {
+    route: state.route,
+    routeWaypoints: state.routeWaypoints,
+    moodCam: moodMapProfile(state.mood),
+    liveZoom: ui.assistantExpanded || ui.assistantFullscreen || state.routePreviewPlaying,
+    reduced: usePrefsStore.getState().reducedMotion,
+  };
+}
+
+function pushLiveMapFocus(getState: () => CityState, setFocus: (f: MapFocus) => void, focus: MapFocus) {
+  if (getState().routePreviewPlaying) return;
+
+  setFocus(focus);
+  const tryFly = () => {
+    if (getState().routePreviewPlaying) return true;
+    return applyMapFocus(focus, liveMapFocusContext(getState));
+  };
+  if (tryFly()) return;
+
+  let tries = 0;
+  const id = window.setInterval(() => {
+    if (getState().routePreviewPlaying || tryFly() || ++tries > 50) {
+      window.clearInterval(id);
+    }
+  }, 40);
+}
+
+function pushCoordsFocus(getState: () => CityState, setFocus: (f: MapFocus) => void, coords: [number, number][]) {
+  if (coords.length >= 2) pushLiveMapFocus(getState, setFocus, { kind: "places-overview", coords });
+  else if (coords.length === 1) {
+    pushLiveMapFocus(getState, setFocus, { kind: "place", lon: coords[0][0], lat: coords[0][1] });
+  }
+}
+
 export const useCityStore = create<CityState>((set, get) => ({
   messages: [],
   mood: "general",
@@ -312,9 +355,9 @@ export const useCityStore = create<CityState>((set, get) => ({
     set({ activeExperienceIndex: idx, highlightedIds: stops.map((s) => s.properties.id) });
     const coords = stops.map((f) => f.geometry.coordinates as [number, number]);
     if (coords.length >= 2) {
-      get().setMapFocus({ kind: "places-overview", coords });
+      pushLiveMapFocus(get, get().setMapFocus, { kind: "places-overview", coords });
     } else if (coords.length === 1) {
-      get().setMapFocus({ kind: "place", lon: coords[0][0], lat: coords[0][1] });
+      pushLiveMapFocus(get, get().setMapFocus, { kind: "place", lon: coords[0][0], lat: coords[0][1] });
     }
   },
 
@@ -676,8 +719,17 @@ export const useCityStore = create<CityState>((set, get) => ({
       return;
     }
     const waypoints = waypointsFromFeatures(stops);
+    const stopCoords = stops.map((s) => s.geometry.coordinates as [number, number]);
+
     useUIStore.getState().setAssistantExpanded(true);
-    set({ isRouting: true, routeError: null });
+    set({
+      isRouting: true,
+      routeError: null,
+      highlightedIds: stops.map((s) => s.properties.id),
+    });
+
+    pushCoordsFocus(get, get().setMapFocus, stopCoords);
+
     try {
       const route = await planRoute(waypoints);
       const followUp = livingFollowUp(
@@ -697,8 +749,23 @@ export const useCityStore = create<CityState>((set, get) => ({
         lastChanged: [`Living · ${stops.length} places · ${Math.round(route.durationMinutes)} min`],
       }));
       if (announce) void speak(followUp);
+      saveLastPlan(stops.map((s) => s.properties.name).slice(0, 3).join(" → "));
+
+      if (preview) {
+        const gen = get().routePreviewGeneration;
+        void startRoutePreviewTour(route, waypoints, gen, usePrefsStore.getState().reducedMotion, {
+          getState: get,
+          setState: (partial) => set(partial),
+          finishRoutePreview: () => get().finishRoutePreview(),
+        });
+      } else {
+        get().focusRouteOverview();
+        pushCoordsFocus(get, get().setMapFocus, stopCoords);
+      }
+
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
+      pushCoordsFocus(get, get().setMapFocus, stopCoords);
       set({
         route: null,
         routeWaypoints: null,

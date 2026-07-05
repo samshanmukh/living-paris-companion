@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Box, Compass, CloudRain, LocateFixed, Minus, Plus, Wind } from "lucide-react";
+import { Box, Compass, CloudRain, LocateFixed, Minus, Plus, Volume2, VolumeX, Wind, Bird } from "lucide-react";
 import { useMap } from "react-map-gl/mapbox";
 import { useCityStore } from "@/store/useCityStore";
 import { useSceneStore } from "@/store/useSceneStore";
+import { usePrefsStore } from "@/store/usePrefsStore";
 import { LAYOUT, topSafe } from "@/lib/layout";
 
 const PARIS_CENTER: [number, number] = [2.3487, 48.855];
@@ -46,6 +47,10 @@ export function MapControls() {
   const setRainMode = useCityStore((s) => s.setRainMode);
   const airQualityVisible = useSceneStore((s) => s.airQualityVisible);
   const toggleAirQuality = useSceneStore((s) => s.toggleAirQuality);
+  const skyLifeEnabled = usePrefsStore((s) => s.skyLifeEnabled);
+  const toggleSkyLife = usePrefsStore((s) => s.toggleSkyLife);
+  const ambientSoundEnabled = usePrefsStore((s) => s.ambientSoundEnabled);
+  const toggleAmbientSound = usePrefsStore((s) => s.toggleAmbientSound);
 
   const getMap = () => mapRef?.getMap();
 
@@ -123,6 +128,20 @@ export function MapControls() {
         active={airQualityVisible}
       >
         <Wind size={18} strokeWidth={1.5} />
+      </CtrlButton>
+      <CtrlButton
+        onClick={toggleSkyLife}
+        label={skyLifeEnabled ? "Hide sky life" : "Show sky life"}
+        active={skyLifeEnabled}
+      >
+        <Bird size={18} strokeWidth={1.5} />
+      </CtrlButton>
+      <CtrlButton
+        onClick={toggleAmbientSound}
+        label={ambientSoundEnabled ? "Mute Paris ambience" : "Paris ambience (off)"}
+        active={ambientSoundEnabled}
+      >
+        {ambientSoundEnabled ? <Volume2 size={18} strokeWidth={1.5} /> : <VolumeX size={18} strokeWidth={1.5} />}
       </CtrlButton>
     </motion.div>
   );

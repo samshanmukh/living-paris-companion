@@ -8,6 +8,11 @@ import { ConversationalPanel } from "@/components/ConversationalPanel";
 import { WhatChangedChips } from "@/components/WhatChangedChips";
 import { RouteBar } from "@/components/RouteBar";
 import { RoutePreviewCard } from "@/components/RoutePreviewCard";
+import { ArrivalOverlay } from "@/components/ArrivalOverlay";
+import { PersonaSidebar } from "@/components/PersonaSidebar";
+import { Onboarding } from "@/components/Onboarding";
+import { DemoOverlay } from "@/components/DemoOverlay";
+import { AmbientSoundController } from "@/components/AmbientSoundController";
 import { moodStyleVars } from "@/lib/moods";
 import { useCityStore } from "@/store/useCityStore";
 import { usePrefsStore } from "@/store/usePrefsStore";
@@ -16,6 +21,8 @@ import { useTraitsStore } from "@/store/useTraitsStore";
 const MapCanvas = lazy(() =>
   import("@/components/MapCanvas").then((m) => ({ default: m.MapCanvas })),
 );
+
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 function MapCanvasGate() {
   const [mounted, setMounted] = useState(false);
@@ -36,6 +43,12 @@ function MapCanvasGate() {
   );
 }
 
+function DebugControlsGate() {
+  const showDebug = usePrefsStore((s) => s.showDebugControls);
+  if (!showDebug && !DEMO_MODE) return null;
+  return <DemoOverlay />;
+}
+
 export const Route = createFileRoute("/")({
   component: Index,
 });
@@ -44,10 +57,12 @@ function Index() {
   const mood = useCityStore((s) => s.mood);
   const reducedMotion = usePrefsStore((s) => s.reducedMotion);
   const initTraits = useTraitsStore((s) => s.init);
+  const recordVisit = usePrefsStore((s) => s.recordVisit);
 
   useEffect(() => {
     void initTraits();
-  }, [initTraits]);
+    recordVisit();
+  }, [initTraits, recordVisit]);
 
   return (
     <MotionConfig reducedMotion={reducedMotion ? "always" : "never"}>
@@ -63,16 +78,20 @@ function Index() {
         }}
       >
         <MapCanvasGate />
+        <ArrivalOverlay />
 
+        <PersonaSidebar />
         <LivingParisBadge />
         <WhatChangedChips />
         <RoutePreviewCard />
         <PipelineViz />
+        <DebugControlsGate />
 
         <RouteBar />
         <ConversationalPanel />
+        <Onboarding />
+        <AmbientSoundController />
 
-        {/* Tap a marker for detail + start route */}
         <PlaceDetail />
       </motion.main>
     </MotionConfig>

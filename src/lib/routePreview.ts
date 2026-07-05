@@ -1,3 +1,4 @@
+import type { Map } from "mapbox-gl";
 import { nearestCoordIndex } from "@/lib/mapCamera";
 import type { ParisFeature, RouteWaypoint } from "@/lib/types";
 
@@ -63,19 +64,31 @@ export function pause(ms: number): Promise<void> {
 }
 
 export function waitForMapMoveEnd(
-  map: { once: (e: string, fn: () => void) => void; off: (e: string, fn: () => void) => void },
+  map: { isMoving?: () => boolean; once: (e: string, fn: () => void) => void; off: (e: string, fn: () => void) => void },
   timeoutMs = 8000,
 ): Promise<void> {
   return new Promise((resolve) => {
-    let done = false;
+    let settled = false;
     const finish = () => {
-      if (done) return;
-      done = true;
+      if (settled) return;
+      settled = true;
       map.off("moveend", finish);
       window.clearTimeout(timer);
       resolve();
     };
     const timer = window.setTimeout(finish, timeoutMs);
+    if (typeof map.isMoving === "function" && !map.isMoving()) {
+      finish();
+      return;
+    }
     map.once("moveend", finish);
   });
+}
+
+/** Wait for a camera flight — uses duration timing so the tour never stalls. */
+export async function waitForCameraFlight(map: Map, durationMs: number) {
+  await Promise.race([
+    waitForMapMoveEnd(map, durationMs + 500),
+    pause(durationMs + 200),
+  ]);
 }

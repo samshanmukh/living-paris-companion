@@ -106,7 +106,11 @@ export function findFeature(
   return null;
 }
 
-export function profileContextLine(profile: GuestProfile, traitKeys: string[]): string {
+export function profileContextLine(
+  profile: GuestProfile,
+  traitKeys: string[],
+  personaKey?: string | null,
+): string {
   const parts: string[] = [];
   if (profile.name) parts.push(`Name: ${profile.name}`);
   if (profile.language) parts.push(`Language: ${profile.language}`);
@@ -117,6 +121,7 @@ export function profileContextLine(profile: GuestProfile, traitKeys: string[]): 
   if (profile.dietary) parts.push(`Dietary: ${profile.dietary}`);
   if (profile.accessibility) parts.push(`Accessibility: ${profile.accessibility}`);
   if (profile.budget) parts.push(`Budget: ${profile.budget}`);
+  if (personaKey) parts.push(`Active persona: ${personaKey}`);
   if (traitKeys.length) parts.push(`Learned signals: ${traitKeys.join(", ")}`);
   return parts.length ? parts.join(". ") : "New guest — greet warmly, one question.";
 }

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCityStore } from "@/store/useCityStore";
+import { usePrefsStore } from "@/store/usePrefsStore";
 
 const STEPS = [
   { key: "intent", label: "Understanding intent" },
@@ -17,10 +18,14 @@ function dotColor(active: boolean, done: boolean) {
 export function PipelineViz() {
   const thinking = useCityStore((s) => s.isThinking);
   const step = useCityStore((s) => s.pipelineStep);
+  const hasSent = useCityStore((s) => s.hasSent);
+  const showDebug = usePrefsStore((s) => s.showDebugControls);
+
+  const visible = thinking && hasSent && (showDebug || import.meta.env.DEV);
 
   return (
     <AnimatePresence>
-      {thinking && (
+      {visible && (
         <motion.aside
           initial={{ opacity: 0, x: 16, scale: 0.96 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}

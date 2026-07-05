@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Sparkles, MousePointerClick, Footprints, X } from "lucide-react";
+import { useCityStore } from "@/store/useCityStore";
 
 const KEY = "lp.onboarded.v1";
 
@@ -18,22 +19,27 @@ const STEPS = [
   {
     icon: Footprints,
     title: "Walk there",
-    body: "A route unfolds from where you are. A spotlight traces the path, and the walking time appears alongside.",
+    body: "Tap Live this one. A route unfolds and the map walks you through each stop.",
     visual: "route" as const,
   },
 ];
 
+/** Quick tour — opens after the first successful AI reply, not on raw first paint. */
 export function Onboarding() {
+  const messages = useCityStore((s) => s.messages);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
 
+  const hasAiReply = messages.some((m) => m.role === "ai");
+
   useEffect(() => {
+    if (!hasAiReply) return;
     try {
       if (!localStorage.getItem(KEY)) setOpen(true);
     } catch {
       setOpen(true);
     }
-  }, []);
+  }, [hasAiReply]);
 
   const dismiss = () => {
     try {
@@ -62,7 +68,6 @@ export function Onboarding() {
           }}
           onClick={dismiss}
         >
-          {/* Spacer pushes card to center on desktop, to bottom on mobile */}
           <div className="flex-1" />
 
           <motion.div
@@ -137,7 +142,6 @@ export function Onboarding() {
             </div>
           </motion.div>
 
-          {/* Bottom safe-area spacer on mobile */}
           <div className="lp-onboard-bottom-spacer" />
         </motion.div>
       )}
@@ -175,11 +179,8 @@ function StepBody({ step }: { step: number }) {
   );
 }
 
-/* --- Animated route + spotlight preview ---------------------------------- */
-
-// Simple curved path across the demo panel. Length precomputed for stroke-dash.
 const PATH_D = "M 24 96 C 90 20, 170 150, 236 40 S 340 130, 396 60";
-const PATH_LEN = 460; // approximate; overshoot is fine for offset math
+const PATH_LEN = 460;
 
 function RouteDemo() {
   return (
@@ -200,24 +201,8 @@ function RouteDemo() {
             <stop offset="60%" stopColor="var(--accent)" stopOpacity="0.15" />
             <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
           </radialGradient>
-          <mask id="lp-mask">
-            <rect width="420" height="130" fill="black" />
-            <circle r="46" fill="url(#lp-spot)">
-              <animateMotion dur="2.6s" repeatCount="indefinite" rotate="auto" path={PATH_D} />
-            </circle>
-          </mask>
         </defs>
-
-        {/* Static ghost path */}
-        <path
-          d={PATH_D}
-          fill="none"
-          stroke="var(--accent)"
-          strokeOpacity="0.18"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-        {/* Drawing dashed path */}
+        <path d={PATH_D} fill="none" stroke="var(--accent)" strokeOpacity="0.18" strokeWidth="3" strokeLinecap="round" />
         <path
           d={PATH_D}
           fill="none"
@@ -227,29 +212,11 @@ function RouteDemo() {
           strokeDasharray={`${PATH_LEN} ${PATH_LEN}`}
           strokeDashoffset={PATH_LEN}
         >
-          <animate
-            attributeName="stroke-dashoffset"
-            from={PATH_LEN}
-            to={0}
-            dur="2.6s"
-            repeatCount="indefinite"
-          />
+          <animate attributeName="stroke-dashoffset" from={PATH_LEN} to={0} dur="2.6s" repeatCount="indefinite" />
         </path>
-        {/* Traveling spotlight */}
-        <circle r="24" fill="url(#lp-spot)">
-          <animateMotion dur="2.6s" repeatCount="indefinite" path={PATH_D} />
-        </circle>
-        <circle r="4" fill="var(--accent)">
-          <animateMotion dur="2.6s" repeatCount="indefinite" path={PATH_D} />
-        </circle>
-
-        {/* Start pin */}
         <circle cx="24" cy="96" r="5" fill="var(--paper)" stroke="var(--accent)" strokeWidth="2" />
-        {/* End pin */}
         <circle cx="396" cy="60" r="6" fill="var(--accent)" />
       </svg>
-
-      {/* Walk-time caption pill */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}

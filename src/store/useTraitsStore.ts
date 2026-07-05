@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { computeKnowsYou, extractTraits, type Trait } from "@/lib/traitsExtractor";
 import { profileContextLine } from "@/lib/concierge";
+import { personaByKey } from "@/lib/personas";
 import type { GuestProfile, IntentQuery } from "@/lib/types";
 import { mergeProfile } from "@/lib/concierge";
+import { useUIStore } from "@/store/useUIStore";
 
 interface TraitsState {
   userId: string | null;
@@ -92,8 +94,12 @@ export const useTraitsStore = create<TraitsState>((set, get) => ({
     if (uid) void syncCloud(uid, { traits: next.traits, profile, intent: next.intent, turns: next.turns });
   },
 
-  buildGuestContext: () =>
-    profileContextLine(get().profile, Object.keys(get().traits)),
+  buildGuestContext: () => {
+    const persona = useUIStore.getState().activePersona;
+    const base = profileContextLine(get().profile, Object.keys(get().traits), persona);
+    const hint = personaByKey(persona)?.conciergeHint;
+    return hint ? `${base}. ${hint}` : base;
+  },
 
   init: async () => {
     // 1. Load local instantly for zero flash.

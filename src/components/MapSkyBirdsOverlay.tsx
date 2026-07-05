@@ -9,7 +9,7 @@ import {
 } from "@/lib/parisBirds";
 import { resolveLightPreset } from "@/lib/parisWeather";
 import { safeProject } from "@/lib/mapSafe";
-import { usePrefsStore } from "@/store/usePrefsStore";
+import { isFirstSession, usePrefsStore } from "@/store/usePrefsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 
 interface ScreenBird {
@@ -26,14 +26,16 @@ export function MapSkyBirdsOverlay() {
   const hourOverride = useSceneStore((s) => s.hourOverride);
   const parisConditions = useSceneStore((s) => s.parisConditions);
   const reduced = usePrefsStore((s) => s.reducedMotion);
+  const skyLifeEnabled = usePrefsStore((s) => s.skyLifeEnabled);
+  const firstSession = isFirstSession();
   const [birds, setBirds] = useState<ScreenBird[]>([]);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   const orbits = useMemo(() => {
     const preset = resolveLightPreset(parisConditions, hourOverride);
-    if (reduced || preset === "night") return [];
-    return createBirdOrbits(birdCountForPreset(preset));
-  }, [parisConditions, hourOverride, reduced]);
+    if (reduced || preset === "night" || !skyLifeEnabled) return [];
+    return createBirdOrbits(birdCountForPreset(preset, { firstSession }));
+  }, [parisConditions, hourOverride, reduced, skyLifeEnabled, firstSession]);
 
   useEffect(() => {
     if (!mapRef) return;
@@ -55,7 +57,7 @@ export function MapSkyBirdsOverlay() {
       if (cancelled) return;
       const preset = resolveLightPreset(parisConditions, hourOverride);
       if (
-        !birdsVisible({ preset, pitch: map.getPitch(), reducedMotion: reduced }) ||
+        !birdsVisible({ preset, pitch: map.getPitch(), reducedMotion: reduced, skyLifeEnabled }) ||
         !map.isStyleLoaded()
       ) {
         setBirds([]);
@@ -105,7 +107,7 @@ export function MapSkyBirdsOverlay() {
       map.off("move", schedule);
       map.off("resize", schedule);
     };
-  }, [mapRef, orbits, parisConditions, hourOverride, reduced]);
+  }, [mapRef, orbits, parisConditions, hourOverride, reduced, skyLifeEnabled]);
 
   if (!portalTarget || birds.length === 0) return null;
 
@@ -122,7 +124,7 @@ export function MapSkyBirdsOverlay() {
           <path
             d={`M -10 ${-2 + b.flap} L 0 0 L 10 ${-2 - b.flap}`}
             fill="none"
-            stroke="rgba(42, 40, 36, 0.55)"
+            stroke="rgba(42, 40, 36, 0.72)"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"

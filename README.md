@@ -18,6 +18,11 @@ Built as a glassmorphism map experience on Mapbox Standard 3D, with a concierge 
 - **Air quality layer** — Optional WAQI/aqicn.org overlay with animated tiles and station markers.
 - **Guest profile & traits** — Remembers who you are across turns; syncs to Supabase when configured.
 - **Demo mode** — “Demo Data” toggle shows same destination, different safest paths for different needs.
+- **Arrival overlay** — Time-aware welcome line synced to the map fly-in; chat panel expands when Paris lands.
+- **Persona sidebar** — Accessibility, halal, night safety, and more; map defaults follow your pick (AQI on for asthma, brighter fog for night safety).
+- **“I need…” chips** — Three quick persona prompts under the mood starters before your first message.
+- **Return visitor** — Remembers your last plan and greets you on return.
+- **Sky life & ambience** — Optional birds on the map and soft Paris ambience (off by default); season tint on fog (spring/autumn/winter).
 
 ---
 
@@ -80,6 +85,7 @@ Copy `.env.example` to `.env`. Never commit real secrets.
 | `VITE_SUPABASE_URL` | No | Supabase project URL (guest profile sync) |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | No | Supabase anon/publishable key |
 | `VITE_SUPABASE_PROJECT_ID` | No | Supabase project id |
+| `VITE_DEMO_MODE` | No | Set to `true` to show Demo Data toggle on load |
 
 ### Server (API routes)
 
@@ -116,11 +122,11 @@ src/
 
 ## Demo script (60 seconds)
 
-1. **Load** — 3D Paris fly-in; badge shows live time and sun/moon.
-2. **Talk** — *“I'm with my partner — something romantic and walkable.”*
-3. **Watch** — Mood shifts; places appear on the map.
+1. **Load** — Arrival overlay + 3D Paris fly-in; badge shows live time, sun/moon, and “Getting to know you”.
+2. **Talk** — *“I'm with my partner — something romantic and walkable.”* (or tap an “I need…” chip)
+3. **Watch** — Mood shifts from live Paris hour; places appear; onboarding tour after first reply.
 4. **Live this one** — Cinematic stop-by-stop route preview.
-5. **Demo Data** — Same destination, three different paths for different needs.
+5. **Demo Data** — Triple-click the badge to reveal debug controls, then toggle Demo Data for the 60s presentation path.
 
 ---
 

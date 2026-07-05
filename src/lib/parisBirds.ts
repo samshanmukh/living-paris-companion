@@ -14,20 +14,22 @@ export interface BirdOrbit {
   flapPhase: number;
 }
 
-export function birdCountForPreset(preset: LightPreset): number {
+export function birdCountForPreset(preset: LightPreset, opts?: { firstSession?: boolean }): number {
   if (preset === "night") return 0;
-  if (preset === "dawn" || preset === "dusk") return 5;
-  return 4;
+  const base = preset === "dawn" || preset === "dusk" ? 5 : 4;
+  return opts?.firstSession ? base + 2 : base;
 }
 
 export function birdsVisible(opts: {
   preset: LightPreset;
   pitch: number;
   reducedMotion: boolean;
+  skyLifeEnabled?: boolean;
 }): boolean {
+  if (opts.skyLifeEnabled === false) return false;
   if (opts.reducedMotion) return false;
   if (opts.preset === "night") return false;
-  return opts.pitch >= 38;
+  return opts.pitch >= 32;
 }
 
 /** Seeded orbits around central Paris — stable paths, varied height and speed. */
