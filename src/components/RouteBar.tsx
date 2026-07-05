@@ -1,26 +1,31 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, Footprints, Navigation, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Footprints, Map, Navigation, X } from "lucide-react";
 import { useCityStore } from "@/store/useCityStore";
 
-/** Floating route controls — visible when a plan exists or a route is active. */
+/** Floating route controls — plan, navigate stops, overview. */
 export function RouteBar() {
   const route = useCityStore((s) => s.route);
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
   const routeError = useCityStore((s) => s.routeError);
+  const activeRouteStop = useCityStore((s) => s.activeRouteStop);
   const geojson = useCityStore((s) => s.geojson);
   const isRouting = useCityStore((s) => s.isRouting);
   const startRoute = useCityStore((s) => s.startRoute);
   const clearRoute = useCityStore((s) => s.clearRoute);
+  const nextRouteStop = useCityStore((s) => s.nextRouteStop);
+  const prevRouteStop = useCityStore((s) => s.prevRouteStop);
+  const focusRouteOverview = useCityStore((s) => s.focusRouteOverview);
+  const focusRouteStop = useCityStore((s) => s.focusRouteStop);
 
   const stopCount = geojson?.features.length ?? 0;
   const hasPlan = stopCount >= 1;
   const show = hasPlan || Boolean(route) || Boolean(routeError);
 
-  const stopNames = (routeWaypoints ?? [])
-    .slice(1)
-    .map((w) => w.name)
-    .filter(Boolean)
-    .join(" → ");
+  const wps = routeWaypoints ?? [];
+  const navStops = wps.length;
+  const canPrev = activeRouteStop > 0;
+  const canNext = activeRouteStop < navStops - 1;
+  const currentWp = wps[activeRouteStop];
 
   const planPreview = (geojson?.features ?? [])
     .slice(0, 3)
@@ -35,9 +40,66 @@ export function RouteBar() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        className="pointer-events-auto fixed z-[45] left-1/2 -translate-x-1/2"
+        className="pointer-events-auto fixed z-[45] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
         style={{ bottom: "calc(min(52vh, 420px) + 12px + env(safe-area-inset-bottom))" }}
       >
+        {route && navStops > 1 && (
+          <div
+            className="glass-strong flex items-center gap-1 rounded-full"
+            style={{
+              padding: "4px 6px",
+              boxShadow: "var(--shadow-soft)",
+              border: "1px solid rgba(255,255,255,0.8)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={prevRouteStop}
+              disabled={!canPrev}
+              aria-label="Previous stop"
+              className="grid size-8 place-items-center rounded-full disabled:opacity-35"
+              style={{ color: "var(--ink)" }}
+            >
+              <ChevronLeft size={18} strokeWidth={2.2} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => focusRouteStop(activeRouteStop)}
+              className="min-w-[140px] max-w-[220px] truncate px-2 text-center"
+              style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}
+            >
+              {activeRouteStop === 0 ? "Start" : currentWp?.name ?? `Stop ${activeRouteStop}`}
+              <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>
+                {" "}· {activeRouteStop + 1}/{navStops}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={nextRouteStop}
+              disabled={!canNext}
+              aria-label="Next stop"
+              className="grid size-8 place-items-center rounded-full disabled:opacity-35"
+              style={{ color: "var(--ink)" }}
+            >
+              <ChevronRight size={18} strokeWidth={2.2} />
+            </button>
+
+            <span className="mx-0.5 h-5 w-px" style={{ background: "rgba(28,26,22,0.12)" }} />
+
+            <button
+              type="button"
+              onClick={focusRouteOverview}
+              aria-label="Show full route"
+              className="grid size-8 place-items-center rounded-full"
+              style={{ color: "var(--accent-text)" }}
+            >
+              <Map size={16} strokeWidth={2} />
+            </button>
+          </div>
+        )}
+
         <div
           className="glass-strong flex items-center gap-3 rounded-full"
           style={{
@@ -89,7 +151,7 @@ export function RouteBar() {
                   {Math.round(route.durationMinutes)} min walk · {(route.distanceMeters / 1000).toFixed(1)} km
                 </p>
                 <p className="truncate" style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500 }}>
-                  {stopNames || `${stopCount} stops on your route`}
+                  {wps.slice(1).map((w) => w.name).filter(Boolean).join(" → ") || `${stopCount} stops`}
                 </p>
               </div>
               <button

@@ -5,39 +5,39 @@ import { useCityStore } from "@/store/useCityStore";
 import { usePrefsStore } from "@/store/usePrefsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { ParisMarker } from "./Marker";
+import { MapAnnotationMarker } from "./MapAnnotationMarker";
 import { RouteLayer } from "./RouteLayer";
 import { UserLocationMarker } from "./UserLocationMarker";
 import { DemoLayers } from "./DemoLayers";
 import { fetchParisConditions, type ParisConditions, type LightPreset } from "@/lib/parisWeather";
+import { useMapCamera } from "@/hooks/useMapCamera";
+import { MAP_PADDING } from "@/lib/mapCamera";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
   (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ??
   (import.meta.env.NEXT_PUBLIC_MAPBOX_TOKEN as string | undefined);
 
-const MAP_PADDING = { top: 88, bottom: 300, left: 48, right: 48 };
-
 const OPENING_VIEW = {
   longitude: 2.3487,
   latitude: 48.855,
-  zoom: 12.6,
-  pitch: 20,
+  zoom: 11.8,
+  pitch: 18,
   bearing: 0,
 } as const;
 
-const DEFAULT_VIEW = {
-  longitude: 2.3387,
-  latitude: 48.859,
-  zoom: 14.6,
-  pitch: 55,
-  bearing: -12,
+/** End state after the launch fly-in — tight street-level Paris. */
+const LAUNCH_VIEW = {
+  longitude: 2.3498,
+  latitude: 48.8572,
+  zoom: 17.6,
+  pitch: 65,
+  bearing: -10,
 } as const;
 
 export function MapCanvas() {
   const geojson = useCityStore((s) => s.geojson);
-  const center = useCityStore((s) => s.center);
   const selected = useCityStore((s) => s.selected);
-  const route = useCityStore((s) => s.route);
   const select = useCityStore((s) => s.select);
   const rainMode = useCityStore((s) => s.rainMode);
   const hourOverride = useSceneStore((s) => s.hourOverride);
@@ -48,23 +48,7 @@ export function MapCanvas() {
   const [conditions, setConditions] = useState<ParisConditions | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
-  // Smooth flyTo on center / selection — skip while a route is drawn (RouteLayer fits bounds).
-  useEffect(() => {
-    if (route) return;
-    const map = mapRef.current?.getMap?.();
-    if (!map) return;
-    map.flyTo({
-      center,
-      zoom: selected ? 16.6 : 14.6,
-      pitch: selected ? 62 : 55,
-      bearing: selected ? -6 : -12,
-      padding: MAP_PADDING,
-      duration: reduced ? 300 : 1600,
-      curve: 1.5,
-      speed: 0.85,
-      essential: true,
-    });
-  }, [center, selected, reduced, route]);
+  useMapCamera(mapRef, mapReady, reduced);
 
   // Weather polling
   useEffect(() => {
@@ -98,7 +82,6 @@ export function MapCanvas() {
       map.setConfigProperty("basemap", "showLandmarkIcons", preset !== "night");
     } catch {}
 
-    // Night / dusk atmosphere
     try {
       if (preset === "night") {
         map.setFog({
@@ -165,7 +148,6 @@ export function MapCanvas() {
     const map = mapRef.current?.getMap?.();
     if (!map) return;
 
-    // Standard style — clean editorial base; accent colors live only on markers/route.
     try {
       map.setConfigProperty("basemap", "lightPreset", "day");
       map.setConfigProperty("basemap", "theme", "faded");
@@ -190,20 +172,31 @@ export function MapCanvas() {
 
     setMapReady(true);
 
-    if (!reduced) {
-      window.setTimeout(() => {
-        map.flyTo({
-          center: [DEFAULT_VIEW.longitude, DEFAULT_VIEW.latitude],
-          zoom: DEFAULT_VIEW.zoom,
-          pitch: DEFAULT_VIEW.pitch,
-          bearing: DEFAULT_VIEW.bearing,
-          duration: 2600,
-          curve: 1.45,
-          speed: 0.75,
-          essential: true,
-        });
-      }, 160);
+    const target = LAUNCH_VIEW;
+    if (reduced) {
+      map.jumpTo({
+        center: [target.longitude, target.latitude],
+        zoom: target.zoom,
+        pitch: target.pitch,
+        bearing: target.bearing,
+        padding: MAP_PADDING,
+      });
+      return;
     }
+
+    window.setTimeout(() => {
+      map.flyTo({
+        center: [target.longitude, target.latitude],
+        zoom: target.zoom,
+        pitch: target.pitch,
+        bearing: target.bearing,
+        padding: MAP_PADDING,
+        duration: 3200,
+        curve: 1.55,
+        speed: 0.72,
+        essential: true,
+      });
+    }, 120);
   };
 
   if (!MAPBOX_TOKEN) {
@@ -224,16 +217,17 @@ export function MapCanvas() {
       <Map
         ref={mapRef}
         mapboxAccessToken={MAPBOX_TOKEN}
-        initialViewState={reduced ? DEFAULT_VIEW : OPENING_VIEW}
+        initialViewState={reduced ? LAUNCH_VIEW : OPENING_VIEW}
         mapStyle="mapbox://styles/mapbox/standard"
         style={{ width: "100%", height: "100%" }}
         attributionControl={false}
         onLoad={onMapLoad}
         antialias
       >
-        <RouteLayer geometry={route?.geometry ?? null} padding={MAP_PADDING} />
+        <RouteLayer />
         <DemoLayers />
         <UserLocationMarker />
+        <MapAnnotationMarker />
         <AnimatePresence>
           {features.map((f, i) => {
             const [lon, lat] = f.geometry.coordinates as [number, number];

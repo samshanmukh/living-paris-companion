@@ -17,11 +17,15 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
   const rainMode = useCityStore((s) => s.rainMode);
   const mood = useCityStore((s) => s.mood);
   const routeWaypoints = useCityStore((s) => s.routeWaypoints);
+  const activeRouteStop = useCityStore((s) => s.activeRouteStop);
+  const highlightedIds = useCityStore((s) => s.highlightedIds);
+  const isHighlighted = highlightedIds.includes(feature.properties.id);
   const isHover = hoveredId === feature.properties.id;
-  const active = selected || isHover;
+  const active = selected || isHover || isHighlighted;
   const dim = rainMode ? rainDim(feature) : 1;
   const stopIndex = routeWaypoints?.findIndex((w) => w.id === feature.properties.id) ?? -1;
   const onRoute = stopIndex > 0;
+  const isActiveStop = stopIndex === activeRouteStop && stopIndex > 0;
   const { title, subtitle } = markerLabel(feature, mood, index);
   const showLabel = dim > 0.45;
 
@@ -71,20 +75,30 @@ export function ParisMarker({ feature, index, selected, onClick }: Props) {
       >
         {onRoute && (
           <span
-            className="absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full text-[9px] font-bold"
-            style={{ background: "var(--ink)", color: "var(--paper-2)" }}
+            className="absolute -top-1 -right-1 z-10 grid place-items-center rounded-full font-bold"
+            style={{
+              width: isActiveStop ? 18 : 16,
+              height: isActiveStop ? 18 : 16,
+              fontSize: isActiveStop ? 10 : 9,
+              background: isActiveStop ? "var(--accent)" : "var(--ink)",
+              color: "var(--paper-2)",
+              boxShadow: isActiveStop ? "0 0 0 3px rgba(199,126,106,0.45)" : undefined,
+            }}
           >
             {stopIndex}
           </span>
         )}
-        {active && (
+        {(active || isActiveStop || isHighlighted) && (
           <span
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-1/2 rounded-full"
             style={{
-              width: 24, height: 24, marginLeft: -12, marginTop: -12,
-              border: "2px solid var(--accent)",
-              opacity: 0.5,
+              width: isHighlighted ? 28 : 24,
+              height: isHighlighted ? 28 : 24,
+              marginLeft: isHighlighted ? -14 : -12,
+              marginTop: isHighlighted ? -14 : -12,
+              border: isHighlighted ? "2.5px solid var(--accent)" : "2px solid var(--accent)",
+              opacity: isHighlighted ? 0.75 : 0.5,
               animation: "lp-pulse-ring 1.8s var(--ease-out) infinite",
             }}
           />

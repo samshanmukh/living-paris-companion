@@ -17,10 +17,40 @@ export const Route = createFileRoute("/api/tts")({
         }
         if (!body.text) return Response.json({ fallback: true, reason: "no-text" }, { status: 200 });
 
-        const lovableKey = process.env.LOVABLE_API_KEY;
         const orKey = process.env.OPENROUTER_API_KEY;
+        const lovableKey = process.env.LOVABLE_API_KEY;
 
         try {
+          // Prefer Grok voice via OpenRouter when configured.
+          if (orKey) {
+            const r = await fetch("https://openrouter.ai/api/v1/audio/speech", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${orKey}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://living-paris.app",
+                "X-Title": "Living Paris",
+              },
+              body: JSON.stringify({
+                model: OR_MODEL,
+                input: body.text.slice(0, 1500),
+                voice: body.voice ?? OR_VOICE,
+                response_format: "mp3",
+              }),
+            });
+            if (r.ok) {
+              const ct = r.headers.get("Content-Type") ?? "audio/mpeg";
+              if (!ct.includes("application/json")) {
+                return new Response(r.body, {
+                  headers: { "Content-Type": ct.startsWith("audio") ? ct : "audio/mpeg", "Cache-Control": "no-store" },
+                });
+              }
+            } else {
+              const errText = await r.text().catch(() => "");
+              console.error("OpenRouter TTS failed", r.status, errText.slice(0, 200));
+            }
+          }
+
           if (lovableKey) {
             const r = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
               method: "POST",
@@ -37,34 +67,9 @@ export const Route = createFileRoute("/api/tts")({
             });
             if (r.ok) {
               const ct = r.headers.get("Content-Type") ?? "audio/mpeg";
-              if (ct.startsWith("audio")) {
+              if (!ct.includes("application/json")) {
                 return new Response(r.body, {
-                  headers: { "Content-Type": ct, "Cache-Control": "no-store" },
-                });
-              }
-            }
-          }
-
-          if (orKey) {
-            const r = await fetch("https://openrouter.ai/api/v1/audio/speech", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${orKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://living-paris.app",
-                "X-Title": "Living Paris",
-              },
-              body: JSON.stringify({
-                model: OR_MODEL,
-                input: body.text,
-                voice: body.voice ?? OR_VOICE,
-              }),
-            });
-            if (r.ok) {
-              const ct = r.headers.get("Content-Type") ?? "audio/mpeg";
-              if (ct.startsWith("audio")) {
-                return new Response(r.body, {
-                  headers: { "Content-Type": ct, "Cache-Control": "no-store" },
+                  headers: { "Content-Type": ct.startsWith("audio") ? ct : "audio/mpeg", "Cache-Control": "no-store" },
                 });
               }
             }

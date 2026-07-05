@@ -1,41 +1,71 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { computeKnowsYou, extractTraits, type Trait } from "@/lib/traitsExtractor";
-import type { IntentQuery } from "@/lib/types";
+import { profileContextLine } from "@/lib/concierge";
+import type { GuestProfile, IntentQuery } from "@/lib/types";
+import { mergeProfile } from "@/lib/concierge";
 
 interface TraitsState {
   userId: string | null;
-  traits: Record<Trait, number>; // trait → strength (1..n)
-  intent: Partial<IntentQuery>; // accumulated
+  traits: Record<Trait, number>;
+  profile: GuestProfile;
+  intent: Partial<IntentQuery>;
   turns: number;
-  lastAdded: Trait[]; // new traits from most recent turn
+  lastAdded: Trait[];
   ready: boolean;
   init: () => Promise<void>;
   ingest: (text: string, intent?: Partial<IntentQuery>) => void;
+  mergeGuestProfile: (partial?: Partial<GuestProfile> | null) => void;
+  buildGuestContext: () => string;
   reset: () => void;
 }
 
 const LS_KEY = "living-paris.traits.v1";
 
-function loadLocal(): { traits: Record<Trait, number>; intent: Partial<IntentQuery>; turns: number } {
-  if (typeof window === "undefined") return { traits: {} as Record<Trait, number>, intent: {}, turns: 0 };
+function loadLocal(): {
+  traits: Record<Trait, number>;
+  profile: GuestProfile;
+  intent: Partial<IntentQuery>;
+  turns: number;
+} {
+  if (typeof window === "undefined") {
+    return { traits: {} as Record<Trait, number>, profile: {}, intent: {}, turns: 0 };
+  }
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const p = JSON.parse(raw);
+      return {
+        traits: p.traits ?? {},
+        profile: p.profile ?? {},
+        intent: p.intent ?? {},
+        turns: p.turns ?? 0,
+      };
+    }
   } catch {}
-  return { traits: {} as Record<Trait, number>, intent: {}, turns: 0 };
+  return { traits: {} as Record<Trait, number>, profile: {}, intent: {}, turns: 0 };
 }
 
-function saveLocal(state: { traits: Record<Trait, number>; intent: Partial<IntentQuery>; turns: number }) {
+function saveLocal(state: {
+  traits: Record<Trait, number>;
+  profile: GuestProfile;
+  intent: Partial<IntentQuery>;
+  turns: number;
+}) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch {}
 }
 
-async function syncCloud(userId: string, s: { traits: Record<Trait, number>; intent: Partial<IntentQuery>; turns: number }) {
+async function syncCloud(
+  userId: string,
+  s: { traits: Record<Trait, number>; profile: GuestProfile; intent: Partial<IntentQuery>; turns: number },
+) {
   try {
     await supabase.from("user_profile").upsert({
       user_id: userId,
-      traits: JSON.parse(JSON.stringify(s.traits)),
+      traits: JSON.parse(JSON.stringify({ ...s.traits, _guestProfile: s.profile })),
       intent: JSON.parse(JSON.stringify(s.intent)),
       turns: s.turns,
       updated_at: new Date().toISOString(),
@@ -46,10 +76,24 @@ async function syncCloud(userId: string, s: { traits: Record<Trait, number>; int
 export const useTraitsStore = create<TraitsState>((set, get) => ({
   userId: null,
   traits: {} as Record<Trait, number>,
+  profile: {},
   intent: {},
   turns: 0,
   lastAdded: [],
   ready: false,
+
+  mergeGuestProfile: (partial) => {
+    if (!partial) return;
+    const profile = mergeProfile(get().profile, partial);
+    const next = { ...get(), profile };
+    set({ profile });
+    saveLocal({ traits: next.traits, profile, intent: next.intent, turns: next.turns });
+    const uid = get().userId;
+    if (uid) void syncCloud(uid, { traits: next.traits, profile, intent: next.intent, turns: next.turns });
+  },
+
+  buildGuestContext: () =>
+    profileContextLine(get().profile, Object.keys(get().traits)),
 
   init: async () => {
     // 1. Load local instantly for zero flash.
@@ -73,15 +117,19 @@ export const useTraitsStore = create<TraitsState>((set, get) => ({
         .eq("user_id", userId)
         .maybeSingle();
       if (row && (row.turns ?? 0) > local.turns) {
+        const rowTraits = (row.traits as Record<string, unknown>) ?? {};
+        const guestProfile = (rowTraits._guestProfile as GuestProfile | undefined) ?? local.profile;
+        const traits = { ...rowTraits } as Record<Trait, number>;
+        delete (traits as Record<string, unknown>)._guestProfile;
         const merged = {
-          traits: (row.traits as Record<Trait, number>) ?? {},
+          traits,
+          profile: guestProfile,
           intent: (row.intent as Partial<IntentQuery>) ?? {},
           turns: row.turns ?? 0,
         };
         set(merged);
         saveLocal(merged);
       } else {
-        // Push local to cloud so a fresh row exists.
         void syncCloud(userId, local);
       }
     } catch {
@@ -102,7 +150,7 @@ export const useTraitsStore = create<TraitsState>((set, get) => ({
     delete (intent as { lat?: number }).lat;
     delete (intent as { lon?: number }).lon;
     const turns = get().turns + 1;
-    const next = { traits, intent, turns };
+    const next = { traits, profile: get().profile, intent, turns };
     set({ ...next, lastAdded });
     saveLocal(next);
     const uid = get().userId;
@@ -110,7 +158,7 @@ export const useTraitsStore = create<TraitsState>((set, get) => ({
   },
 
   reset: () => {
-    const next = { traits: {} as Record<Trait, number>, intent: {}, turns: 0 };
+    const next = { traits: {} as Record<Trait, number>, profile: {} as GuestProfile, intent: {}, turns: 0 };
     set({ ...next, lastAdded: [] });
     saveLocal(next);
     const uid = get().userId;

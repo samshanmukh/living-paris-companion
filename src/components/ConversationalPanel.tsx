@@ -36,7 +36,9 @@ export function ConversationalPanel() {
   const liveTranscript = useCityStore((s) => s.liveTranscript);
   const hasSent = useCityStore((s) => s.hasSent);
   const send = useCityStore((s) => s.send);
+  const select = useCityStore((s) => s.select);
   const traits = useTraitsStore((s) => s.traits);
+  const guestName = useTraitsStore((s) => s.profile.name);
 
   const { listening, toggle: toggleMic } = useVoiceInput();
 
@@ -92,6 +94,7 @@ export function ConversationalPanel() {
                 className="font-serif leading-snug"
                 style={{ fontSize: 22, color: "var(--ink)", marginBottom: 16 }}
               >
+                {guestName ? `${guestName} — ` : ""}
                 {MOOD_THEMES[mood]?.line ?? MOOD_THEMES.general.line}
               </motion.p>
             )}
@@ -146,6 +149,27 @@ export function ConversationalPanel() {
                     <p className="mt-1.5" style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic" }}>
                       {learned}
                     </p>
+                  )}
+                  {lastAI.places && lastAI.places.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {lastAI.places.map((place) => (
+                        <button
+                          key={place.properties.id}
+                          type="button"
+                          onClick={() => select(place)}
+                          className="rounded-full px-3 py-1.5"
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "var(--accent-text)",
+                            background: "var(--accent-tint)",
+                            border: "1px solid var(--accent-line)",
+                          }}
+                        >
+                          {place.properties.name}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               </motion.div>

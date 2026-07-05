@@ -91,15 +91,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Living Paris — Have a conversation with Paris" },
-      { name: "description", content: "An AI city-companion for Paris. Describe an experience and the map reshapes with recommendations and a walking route." },
-      { property: "og:description", content: "An AI city-companion for Paris. Describe an experience and the map reshapes with recommendations and a walking route." },
       { name: "twitter:description", content: "An AI city-companion for Paris. Describe an experience and the map reshapes with recommendations and a walking route." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ca1b5ad7-7905-47d5-9a15-c0a2bbbb266f/id-preview-79dc77fa--7250f453-c115-492b-a691-0d117d3df6ed.lovable.app-1783217408512.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ca1b5ad7-7905-47d5-9a15-c0a2bbbb266f/id-preview-79dc77fa--7250f453-c115-492b-a691-0d117d3df6ed.lovable.app-1783217408512.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

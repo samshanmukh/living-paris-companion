@@ -1,17 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CONCIERGE_SYSTEM } from "@/lib/conciergePrompt";
+import { normalizeConciergeResponse } from "@/lib/concierge";
+import type { GuestProfile, IntentQuery } from "@/lib/types";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
-
-const SYSTEM = `You are Living Paris — a warm, first-person Parisian companion who controls the map through conversation.
-Reply with STRICT JSON only, no prose, no markdown fences:
-{
-  "reply":"1-3 sentences, first person, warm and specific",
-  "intent":{"mood":"romantic|family|rainy|photography|relaxing|culture|food|nightlife|hidden|general","indoor":true|false,"walk":5-45,"lat":48.8566,"lon":2.3522,"rainy":true|false},
-  "mapActions":{"hour":0-23|null,"rain":true|false|null,"lightPreset":"dawn|day|dusk|night|null"}
-}
-Use mapActions when the user describes time or weather ("after midnight"→hour:23,lightPreset:"night"; "it's raining"→rain:true).
-If the user mentions where they are, set intent.lat and intent.lon to that Paris neighborhood.
-Default mapActions fields to null when live time/weather should apply.`;
 
 function gatewayConfig() {
   if (process.env.LOVABLE_API_KEY) {
@@ -36,8 +28,9 @@ function errResp(reason: string, status = 502) {
     {
       error: true,
       reason,
-      reply: `I'm having trouble reaching my thoughts (${reason}).`,
-      intent: { mood: "general" },
+      reply: `Give me a moment — I'm gathering myself (${reason}).`,
+      query: { mood: "general" },
+      actions: [],
     },
     { status },
   );
@@ -50,12 +43,20 @@ export const Route = createFileRoute("/api/chat")({
         const gw = gatewayConfig();
         if (!gw) return errResp("missing API key", 500);
 
-        let body: { messages: { role: string; content: string }[] };
+        let body: {
+          messages: { role: string; content: string }[];
+          profile?: GuestProfile;
+          guestContext?: string;
+        };
         try {
           body = await request.json();
         } catch {
           return errResp("bad body", 400);
         }
+
+        const contextBlock = body.guestContext
+          ? `\n\nCURRENT GUEST CONTEXT (merge, do not repeat verbatim):\n${body.guestContext}`
+          : "";
 
         try {
           const r = await fetch(gw.url, {
@@ -63,31 +64,41 @@ export const Route = createFileRoute("/api/chat")({
             headers: {
               Authorization: `Bearer ${gw.key}`,
               "Content-Type": "application/json",
-              ...(gw.url.includes("openrouter") ? { "HTTP-Referer": "https://living-paris.app", "X-Title": "Living Paris" } : {}),
+              ...(gw.url.includes("openrouter")
+                ? { "HTTP-Referer": "https://living-paris.app", "X-Title": "Living Paris" }
+                : {}),
             },
             body: JSON.stringify({
               model: gw.model,
-              messages: [{ role: "system", content: SYSTEM }, ...body.messages],
-              temperature: 0.7,
+              messages: [
+                { role: "system", content: CONCIERGE_SYSTEM + contextBlock },
+                ...body.messages,
+              ],
+              temperature: 0.75,
             }),
           });
 
           if (!r.ok) {
             const txt = await r.text().catch(() => "");
             console.error("chat gateway", r.status, txt.slice(0, 300));
-            if (r.status === 429) return errResp("rate limited — please try again in a moment", 429);
+            if (r.status === 429) return errResp("rate limited", 429);
             return errResp(`gateway ${r.status}`, 502);
           }
+
           const data = await r.json();
           const content: string = data.choices?.[0]?.message?.content ?? "";
           const match = content.match(/\{[\s\S]*\}/);
           try {
-            const parsed = JSON.parse(match ? match[0] : content);
-            return Response.json(parsed);
+            const parsed = JSON.parse(match ? match[0] : content) as Record<string, unknown>;
+            const normalized = normalizeConciergeResponse(parsed);
+            return Response.json(normalized);
           } catch {
             return Response.json({
-              reply: content || "Here's what I'd choose.",
-              intent: { mood: "general" },
+              reply:
+                content.replace(/[#*`]/g, "").slice(0, 400) ||
+                "I'm here — what kind of Paris do you want today?",
+              query: { mood: "general" } satisfies Partial<IntentQuery>,
+              actions: [],
             });
           }
         } catch (e) {

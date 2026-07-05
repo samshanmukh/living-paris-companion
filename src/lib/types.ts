@@ -55,11 +55,56 @@ export interface IntentQuery {
   accessibility?: boolean;
   indoor?: boolean;
   rainy?: boolean;
+  dietary?: string[];
   lat?: number;
   lon?: number;
   radius?: number;
   layers?: LayerType[];
   limit?: number;
+}
+
+export interface GuestProfile {
+  name?: string | null;
+  language?: string | null;
+  visitorType?: "visitor" | "local" | null;
+  companions?: string | null;
+  onTheirMind?: string | null;
+  exploreStyle?: string | null;
+  tasteOfHome?: string | null;
+  dietary?: string | null;
+  accessibility?: string | null;
+  budget?: string | null;
+  energy?: string | null;
+  notes?: string | null;
+}
+
+export type MapActionType =
+  | "flyTo"
+  | "highlight"
+  | "route"
+  | "save"
+  | "annotate"
+  | "setAccent"
+  | "relight";
+
+export interface MapAction {
+  type: MapActionType;
+  lat?: number;
+  lon?: number;
+  zoom?: number;
+  placeId?: string;
+  placeName?: string;
+  mood?: MoodType;
+  hour?: number;
+  rain?: boolean;
+  lightPreset?: "dawn" | "day" | "dusk" | "night";
+  text?: string;
+}
+
+export interface MapAnnotation {
+  lon: number;
+  lat: number;
+  text: string;
 }
 
 export interface SpatialQueryResult {

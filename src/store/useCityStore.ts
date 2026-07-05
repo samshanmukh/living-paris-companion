@@ -1,62 +1,58 @@
 import { create } from "zustand";
 import { parseIntent, planRoute, spatialQuery } from "@/lib/api";
+import { mergeQuery, normalizeConciergeResponse } from "@/lib/concierge";
+import { executeMapActions } from "@/lib/executeMapActions";
 import { detectLocationCommand, geocodeParis, geolocateDevice } from "@/lib/geocode";
 import { useTraitsStore } from "@/store/useTraitsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { isRainFriendly } from "@/lib/rainMode";
-import type { IntentQuery, MoodType, ParisFeature, ParisFeatureCollection, RouteResponse, RouteWaypoint } from "@/lib/types";
+import type { MapFocus } from "@/lib/mapCamera";
+import type {
+  IntentQuery,
+  MapAction,
+  MapAnnotation,
+  MoodType,
+  ParisFeature,
+  ParisFeatureCollection,
+  RouteResponse,
+  RouteWaypoint,
+  SpatialQueryResult,
+} from "@/lib/types";
 
 export type ChatMessage = { role: "user" | "ai"; text: string; places?: ParisFeature[] };
-
-export type MapActions = {
-  hour?: number | null;
-  rain?: boolean | null;
-  lightPreset?: "dawn" | "day" | "dusk" | "night" | null;
-};
 
 async function chatWithParis(
   history: ChatMessage[],
   userText: string,
-  memoryHint?: string,
-): Promise<{ reply: string; intent: IntentQuery; mapActions?: MapActions }> {
-  const system = memoryHint
-    ? { role: "system", content: `Context about this visitor: ${memoryHint}` }
-    : null;
+  guestContext: string,
+) {
   const messages = [
-    ...(system ? [system] : []),
     ...history.map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })),
     { role: "user", content: userText },
   ];
   const r = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, guestContext }),
   });
   const data = await r.json();
   if (!r.ok || data.error) {
-    throw new Error(data.reply ?? `Grok chat failed (${r.status})`);
+    throw new Error(data.reply ?? `Chat failed (${r.status})`);
   }
-  const intent: IntentQuery = { lat: 48.8566, lon: 2.3522, walk: 15, ...(data.intent ?? {}) };
-  return {
-    reply: data.reply ?? "Here's what I'd choose.",
-    intent,
-    mapActions: data.mapActions as MapActions | undefined,
-  };
+  return normalizeConciergeResponse(data as Record<string, unknown>);
 }
 
-function applyMapActions(actions: MapActions | undefined, intent: IntentQuery) {
-  const scene = useSceneStore.getState();
-  if (actions?.hour != null) scene.setHour(actions.hour);
-  else if (actions?.lightPreset === "night") scene.setHour(23);
-  else if (actions?.lightPreset === "dusk") scene.setHour(19);
-  else if (actions?.lightPreset === "dawn") scene.setHour(6);
-  else if (actions?.lightPreset === "day") scene.setHour(12);
-
-  if (actions?.rain === true) scene.setRain(true);
-  else if (actions?.rain === false) scene.setRain(false);
-  else if (intent.rainy || intent.mood === "rainy") scene.setRain(true);
-  else if (intent.mood === "nightlife") scene.setHour(23);
-  else if (intent.mood === "relaxing") scene.setHour(8);
+function needsSpatialQuery(
+  query: Partial<IntentQuery> | undefined,
+  actions: MapAction[],
+  merged: IntentQuery,
+): boolean {
+  if (actions.some((a) => a.type === "highlight" || a.type === "route" || a.type === "save")) {
+    return true;
+  }
+  if (merged.mood && merged.mood !== "general") return true;
+  if (query && Object.keys(query).some((k) => !["lat", "lon", "walk"].includes(k))) return true;
+  return false;
 }
 
 function speakWithBrowser(text: string) {
@@ -71,21 +67,53 @@ function speakWithBrowser(text: string) {
   } catch { /* ignore */ }
 }
 
+let activeAudio: HTMLAudioElement | null = null;
+
 async function speak(text: string) {
+  const clean = text.trim();
+  if (!clean) return;
   try {
+    activeAudio?.pause();
+    activeAudio = null;
+
     const r = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: clean }),
     });
     const ct = r.headers.get("Content-Type") ?? "";
-    if (!r.ok || ct.includes("application/json")) { speakWithBrowser(text); return; }
+
+    if (ct.includes("application/json")) {
+      speakWithBrowser(clean);
+      return;
+    }
+    if (!r.ok) {
+      speakWithBrowser(clean);
+      return;
+    }
+
     const blob = await r.blob();
+    if (blob.size < 128) {
+      speakWithBrowser(clean);
+      return;
+    }
+
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    void audio.play().catch(() => speakWithBrowser(text));
-  } catch { speakWithBrowser(text); }
+    activeAudio = audio;
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (activeAudio === audio) activeAudio = null;
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (activeAudio === audio) activeAudio = null;
+      speakWithBrowser(clean);
+    };
+    await audio.play();
+  } catch {
+    speakWithBrowser(clean);
+  }
 }
 
 function diffLabels(prev: MoodType, next: MoodType, prevCount: number, nextCount: number, rainOn: boolean): string[] {
@@ -141,8 +169,17 @@ interface CityState {
   accessibleMode: boolean;
   userLocation: [number, number] | null;
   locationLabel: string | null;
+  mapFocus: MapFocus | null;
+  mapFocusTick: number;
+  activeRouteStop: number;
+  selectionTick: number;
+  highlightedIds: string[];
+  mapAnnotation: MapAnnotation | null;
+  setHighlightedIds: (ids: string[]) => void;
+  setMapAnnotation: (a: MapAnnotation | null) => void;
+  setMoodFromAction: (mood: MoodType) => void;
   send: (text: string) => Promise<void>;
-  select: (f: ParisFeature) => Promise<void>;
+  select: (f: ParisFeature) => void;
   routeToPlace: (f: ParisFeature) => Promise<void>;
   hover: (id: string | null) => void;
   clearSelection: () => void;
@@ -151,6 +188,11 @@ interface CityState {
   setAccessibleMode: (on: boolean) => void;
   setLiveTranscript: (t: string) => void;
   setUserLocation: (loc: [number, number] | null, label?: string | null) => void;
+  setMapFocus: (focus: MapFocus) => void;
+  focusRouteOverview: () => void;
+  focusRouteStop: (stopIndex: number) => void;
+  nextRouteStop: () => void;
+  prevRouteStop: () => void;
   startRoute: () => Promise<void>;
   clearRoute: () => void;
 }
@@ -176,10 +218,44 @@ export const useCityStore = create<CityState>((set, get) => ({
   accessibleMode: false,
   userLocation: null,
   locationLabel: null,
+  mapFocus: null,
+  mapFocusTick: 0,
+  activeRouteStop: 0,
+  selectionTick: 0,
+  highlightedIds: [],
+  mapAnnotation: null,
+
+  setHighlightedIds: (ids) => set({ highlightedIds: ids }),
+  setMapAnnotation: (a) => set({ mapAnnotation: a }),
+  setMoodFromAction: (mood) => set({ mood }),
+
+  setMapFocus: (focus) => set((s) => ({ mapFocus: focus, mapFocusTick: s.mapFocusTick + 1 })),
+  focusRouteOverview: () => {
+    set({ activeRouteStop: 0 });
+    get().setMapFocus({ kind: "route-overview" });
+  },
+  focusRouteStop: (stopIndex) => {
+    const wps = get().routeWaypoints;
+    if (!wps?.length || stopIndex < 0 || stopIndex >= wps.length) return;
+    set({ activeRouteStop: stopIndex });
+    get().setMapFocus({ kind: "route-stop", stopIndex });
+  },
+  nextRouteStop: () => {
+    const wps = get().routeWaypoints;
+    if (!wps?.length) return;
+    const next = Math.min(get().activeRouteStop + 1, wps.length - 1);
+    get().focusRouteStop(next);
+  },
+  prevRouteStop: () => {
+    const prev = Math.max(get().activeRouteStop - 1, 0);
+    get().focusRouteStop(prev);
+  },
 
   setLiveTranscript: (t) => set({ liveTranscript: t }),
-  setUserLocation: (loc, label = null) =>
-    set({ userLocation: loc, locationLabel: label, ...(loc ? { center: loc } : {}) }),
+  setUserLocation: (loc, label = null) => {
+    set({ userLocation: loc, locationLabel: label, ...(loc ? { center: loc } : {}) });
+    if (loc) get().setMapFocus({ kind: "place", lon: loc[0], lat: loc[1] });
+  },
   setAccessibleMode: (on) => set({ accessibleMode: on, mood: on ? "relaxing" : get().mood }),
 
   send: async (text: string) => {
@@ -273,69 +349,106 @@ export const useCityStore = create<CityState>((set, get) => ({
     }
 
     // ── Normal chat + spatial query path ────────────────────────────────
-    const priorMessages = get().messages.slice(0, -1); // exclude the just-pushed user msg
+    const priorMessages = get().messages.slice(0, -1);
     const prevMood = get().mood;
     const prevCount = get().geojson?.features.length ?? 0;
-    set({ isThinking: true, pipelineStep: 0, lastChanged: [] });
+    set({ isThinking: true, pipelineStep: 0, lastChanged: [], highlightedIds: [], mapAnnotation: null });
 
     try {
       useTraitsStore.getState().ingest(clean);
-      const traitState = useTraitsStore.getState();
-      const memoryHint = Object.keys(traitState.traits).length
-        ? "Learned traits: " + Object.keys(traitState.traits).join(", ")
-        : undefined;
+      const traitsStore = useTraitsStore.getState();
+      const guestContext = traitsStore.buildGuestContext();
 
       let reply: string;
-      let intent: IntentQuery;
-      let mapActions: MapActions | undefined;
+      let query: Partial<IntentQuery> | undefined;
+      let actions: MapAction[] = [];
       try {
         set({ pipelineStep: 1 });
-        const out = await chatWithParis(priorMessages, clean, memoryHint);
+        const out = await chatWithParis(priorMessages, clean, guestContext);
         reply = out.reply;
-        intent = out.intent;
-        mapActions = out.mapActions;
-        applyMapActions(mapActions, intent);
-        if (intent.rainy || mapActions?.rain) await get().setRainMode(true);
+        query = out.query;
+        actions = out.actions;
+        if (out.profile) traitsStore.mergeGuestProfile(out.profile);
       } catch (error) {
-        intent = parseIntent(clean);
-        applyMapActions(undefined, intent);
+        query = parseIntent(clean);
         reply = error instanceof Error && !error.message.startsWith("Grok")
           ? error.message
           : "Here's what I'd choose.";
       }
 
-      useTraitsStore.getState().ingest("", intent);
-      set({ pipelineStep: 2 });
+      const mergedQuery = mergeQuery(
+        useTraitsStore.getState().intent,
+        query,
+        useTraitsStore.getState().profile,
+      );
+      useTraitsStore.getState().ingest("", mergedQuery);
 
       const userLoc = get().userLocation;
       if (userLoc) {
-        intent = { ...intent, lon: userLoc[0], lat: userLoc[1] };
+        mergedQuery.lon = userLoc[0];
+        mergedQuery.lat = userLoc[1];
       }
 
-      const result = await spatialQuery(intent);
-      set({ pipelineStep: 3 });
+      let result: SpatialQueryResult | null = null;
+      if (needsSpatialQuery(query, actions, mergedQuery)) {
+        set({ pipelineStep: 2 });
+        result = await spatialQuery(mergedQuery);
+        set({ pipelineStep: 3 });
+      }
 
-      const mapCenter = userLoc ?? result.meta.center;
+      const geojson = result?.geojson ?? get().geojson;
+      const mapCenter = userLoc ?? result?.meta.center ?? get().center;
+
+      if (actions.length) {
+        await executeMapActions(actions, geojson, {
+          setMapFocus: get().setMapFocus,
+          startRoute: get().startRoute,
+          select: get().select,
+          setRainMode: get().setRainMode,
+          setHighlightedIds: get().setHighlightedIds,
+          setMapAnnotation: get().setMapAnnotation,
+          setMoodFromAction: get().setMoodFromAction,
+        });
+      }
 
       const rainOn = get().rainMode;
-      const places = (result.geojson.features ?? []).slice(0, 4);
-      const nextMood: MoodType = intent.mood ?? "general";
+      const places = (geojson?.features ?? []).slice(0, 4);
+      const nextMood: MoodType = mergedQuery.mood ?? get().mood;
+      const choreographed = actions.some((a) => a.type === "flyTo" || a.type === "highlight");
+
       set((s) => ({
         mood: nextMood,
-        geojson: result.geojson,
-        center: mapCenter,
-        route: null,
-        routeWaypoints: null,
-        routeError: null,
-        selected: null,
+        ...(result
+          ? {
+              geojson: result.geojson,
+              center: mapCenter,
+              route: null,
+              routeWaypoints: null,
+              routeError: null,
+              selected: null,
+            }
+          : {}),
         isThinking: false,
         pipelineStep: 0,
-        messages: [...s.messages, { role: "ai", text: reply, places }],
-        lastChanged: diffLabels(prevMood, nextMood, prevCount, result.geojson.features.length, rainOn),
+        messages: [...s.messages, { role: "ai", text: reply, places: result ? places : undefined }],
+        lastChanged: result
+          ? diffLabels(prevMood, nextMood, prevCount, geojson?.features.length ?? 0, rainOn)
+          : [],
       }));
 
       setTimeout(() => set({ lastChanged: [] }), 3200);
       void speak(reply);
+
+      if (result && !choreographed) {
+        const placeCoords = places
+          .map((f) => f.geometry.coordinates as [number, number])
+          .filter((c) => c.length === 2);
+        if (placeCoords.length >= 2) {
+          get().setMapFocus({ kind: "places-overview", coords: placeCoords });
+        } else if (placeCoords.length === 1) {
+          get().setMapFocus({ kind: "place", lon: placeCoords[0][0], lat: placeCoords[0][1] });
+        }
+      }
     } catch {
       set(() => ({
         isThinking: false,
@@ -351,7 +464,8 @@ export const useCityStore = create<CityState>((set, get) => ({
 
   select: (f: ParisFeature) => {
     const [lon, lat] = f.geometry.coordinates as [number, number];
-    set({ selected: f, center: [lon, lat] });
+    set((s) => ({ selected: f, center: [lon, lat], selectionTick: s.selectionTick + 1 }));
+    get().setMapFocus({ kind: "place", lon, lat });
   },
 
   routeToPlace: async (f: ParisFeature) => {
@@ -367,8 +481,10 @@ export const useCityStore = create<CityState>((set, get) => ({
       set({
         route,
         routeWaypoints: waypoints,
+        activeRouteStop: 1,
         lastChanged: [`Route · to ${f.properties.name}`],
       });
+      get().focusRouteStop(1);
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
       set({
@@ -403,7 +519,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     setTimeout(() => set({ routeError: null }), 4000);
   },
 
-  clearRoute: () => set({ route: null, routeWaypoints: null, routeError: null }),
+  clearRoute: () => set({ route: null, routeWaypoints: null, routeError: null, activeRouteStop: 0 }),
 
   planItinerary: async (stops: ParisFeature[]) => {
     if (stops.length < 1) return;
@@ -422,8 +538,10 @@ export const useCityStore = create<CityState>((set, get) => ({
       set({
         route,
         routeWaypoints: waypoints,
+        activeRouteStop: 0,
         lastChanged: [`Route · ${stops.length} stops · ${Math.round(route.durationMinutes)} min`],
       });
+      get().focusRouteOverview();
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
       set({
