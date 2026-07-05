@@ -2,11 +2,12 @@ import { usePrefsStore } from "@/store/usePrefsStore";
 import { useSceneStore } from "@/store/useSceneStore";
 import { findFeature } from "@/lib/concierge";
 import type { MapAction, MapAnnotation, MoodType, ParisFeature, ParisFeatureCollection } from "@/lib/types";
+import type { RouteOptions } from "@/store/useCityStore";
 import type { MapFocus } from "@/lib/mapCamera";
 
 export type ActionStore = {
   setMapFocus: (focus: MapFocus) => void;
-  startRoute: () => Promise<void>;
+  startRoute: (opts?: RouteOptions) => Promise<void>;
   select: (f: ParisFeature) => void;
   setRainMode: (on: boolean) => Promise<void>;
   setHighlightedIds: (ids: string[]) => void;
@@ -68,7 +69,7 @@ async function runAction(
       break;
     }
     case "route": {
-      await store.startRoute();
+      await store.startRoute({ announce: false, preview: true });
       break;
     }
     case "save": {

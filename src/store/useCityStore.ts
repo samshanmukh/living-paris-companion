@@ -24,6 +24,14 @@ import type {
 
 export type ChatMessage = { role: "user" | "ai"; text: string; places?: ParisFeature[] };
 
+/** Controls whether route planning also posts a second chat bubble. */
+export type RouteOptions = {
+  announce?: boolean;
+  preview?: boolean;
+};
+
+const SILENT_ROUTE: RouteOptions = { announce: false, preview: false };
+
 async function chatWithParis(
   history: ChatMessage[],
   userText: string,
@@ -187,10 +195,10 @@ interface CityState {
   setMoodFromAction: (mood: MoodType) => void;
   send: (text: string) => Promise<void>;
   select: (f: ParisFeature) => void;
-  routeToPlace: (f: ParisFeature) => Promise<void>;
+  routeToPlace: (f: ParisFeature, opts?: RouteOptions) => Promise<void>;
   hover: (id: string | null) => void;
   clearSelection: () => void;
-  planItinerary: (stops: ParisFeature[]) => Promise<void>;
+  planItinerary: (stops: ParisFeature[], opts?: RouteOptions) => Promise<void>;
   setRainMode: (on: boolean) => Promise<void>;
   setAccessibleMode: (on: boolean) => void;
   setLiveTranscript: (t: string) => void;
@@ -200,7 +208,7 @@ interface CityState {
   focusRouteStop: (stopIndex: number) => void;
   nextRouteStop: () => void;
   prevRouteStop: () => void;
-  startRoute: () => Promise<void>;
+  startRoute: (opts?: RouteOptions) => Promise<void>;
   clearRoute: () => void;
   skipRoutePreview: () => void;
   finishRoutePreview: () => void;
@@ -354,14 +362,14 @@ export const useCityStore = create<CityState>((set, get) => ({
           const geo = get().geojson;
           if (geo && geo.features.length) {
             const acc = geo.features.filter((f) => f.properties.accessible !== false).slice(0, 4);
-            if (acc.length >= 2) await get().planItinerary(acc);
+            if (acc.length >= 2) await get().planItinerary(acc, SILENT_ROUTE);
           }
           set({ lastChanged: ["Step-free route", "Lift-equipped metro"] });
           setTimeout(() => set({ lastChanged: [] }), 3200);
           break;
         }
         case "start-route": {
-          await get().startRoute();
+          await get().startRoute(SILENT_ROUTE);
           break;
         }
         case "night":
@@ -428,7 +436,7 @@ export const useCityStore = create<CityState>((set, get) => ({
       if (actions.length) {
         await executeMapActions(actions, geojson, {
           setMapFocus: get().setMapFocus,
-          startRoute: get().startRoute,
+          startRoute: (opts) => get().startRoute(opts),
           select: get().select,
           setRainMode: get().setRainMode,
           setHighlightedIds: get().setHighlightedIds,
@@ -494,7 +502,8 @@ export const useCityStore = create<CityState>((set, get) => ({
     get().setMapFocus({ kind: "place", lon, lat });
   },
 
-  routeToPlace: async (f: ParisFeature) => {
+  routeToPlace: async (f: ParisFeature, opts: RouteOptions = {}) => {
+    const announce = opts.announce ?? true;
     const [lon, lat] = f.geometry.coordinates as [number, number];
     const start = get().userLocation ?? get().center;
     const waypoints: RouteWaypoint[] = [
@@ -510,10 +519,10 @@ export const useCityStore = create<CityState>((set, get) => ({
         route,
         routeWaypoints: waypoints,
         activeRouteStop: 1,
-        messages: [...s.messages, { role: "ai", text: followUp }],
+        ...(announce ? { messages: [...s.messages, { role: "ai", text: followUp }] } : {}),
         lastChanged: [`Living · ${f.properties.name}`],
       }));
-      void speak(followUp);
+      if (announce) void speak(followUp);
       get().focusRouteStop(1);
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
@@ -529,20 +538,20 @@ export const useCityStore = create<CityState>((set, get) => ({
     }
   },
 
-  startRoute: async () => {
+  startRoute: async (opts: RouteOptions = {}) => {
     useUIStore.getState().setAssistantExpanded(true);
     const geo = get().geojson;
     if (geo && geo.features.length >= 2) {
-      await get().planItinerary(geo.features);
+      await get().planItinerary(geo.features, opts);
       return;
     }
     if (geo?.features.length === 1) {
-      await get().routeToPlace(geo.features[0]);
+      await get().routeToPlace(geo.features[0], opts);
       return;
     }
     const selected = get().selected;
     if (selected) {
-      await get().routeToPlace(selected);
+      await get().routeToPlace(selected, opts);
       return;
     }
     const msg = "Plan a walk first, or tap a place on the map.";
@@ -562,9 +571,11 @@ export const useCityStore = create<CityState>((set, get) => ({
       routePreviewGeneration: s.routePreviewGeneration + 1,
     })),
 
-  planItinerary: async (stops: ParisFeature[]) => {
+  planItinerary: async (stops: ParisFeature[], opts: RouteOptions = {}) => {
+    const announce = opts.announce ?? true;
+    const preview = opts.preview ?? true;
     if (stops.length < 2) {
-      if (stops.length === 1) await get().routeToPlace(stops[0]);
+      if (stops.length === 1) await get().routeToPlace(stops[0], opts);
       return;
     }
     const waypoints = waypointsFromFeatures(stops);
@@ -583,12 +594,12 @@ export const useCityStore = create<CityState>((set, get) => ({
         activeRouteStop: 0,
         routePreviewStop: 0,
         routePreviewProgress: 0,
-        routePreviewPlaying: true,
+        routePreviewPlaying: preview,
         routePreviewGeneration: s.routePreviewGeneration + 1,
-        messages: [...s.messages, { role: "ai", text: followUp }],
+        ...(announce ? { messages: [...s.messages, { role: "ai", text: followUp }] } : {}),
         lastChanged: [`Living · ${stops.length} places · ${Math.round(route.durationMinutes)} min`],
       }));
-      void speak(followUp);
+      if (announce) void speak(followUp);
       setTimeout(() => set({ lastChanged: [] }), 3200);
     } catch {
       set({
@@ -610,7 +621,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     if (on && geo && geo.features.length >= 2) {
       const covered = geo.features.filter(isRainFriendly).slice(0, 4);
       if (covered.length >= 2) {
-        await get().planItinerary(covered);
+        await get().planItinerary(covered, SILENT_ROUTE);
       }
     }
   },
