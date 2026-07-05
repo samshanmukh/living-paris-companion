@@ -9,6 +9,9 @@ import { MapAnnotationMarker } from "./MapAnnotationMarker";
 import { RouteLayer } from "./RouteLayer";
 import { UserLocationMarker } from "./UserLocationMarker";
 import { DemoLayers } from "./DemoLayers";
+import { AirQualityLayer } from "./AirQualityLayer";
+import { AirQualityLegend } from "./AirQualityLegend";
+import { MapControls } from "./MapControls";
 import { fetchParisConditions, type ParisConditions, type LightPreset } from "@/lib/parisWeather";
 import { useMapCamera } from "@/hooks/useMapCamera";
 import { MAP_PADDING } from "@/lib/mapCamera";
@@ -225,9 +228,11 @@ export function MapCanvas() {
         antialias
       >
         <RouteLayer />
+        <AirQualityLayer />
         <DemoLayers />
         <UserLocationMarker />
         <MapAnnotationMarker />
+        <MapControls />
         <AnimatePresence>
           {features.map((f, i) => {
             const [lon, lat] = f.geometry.coordinates as [number, number];
@@ -245,6 +250,7 @@ export function MapCanvas() {
           })}
         </AnimatePresence>
       </Map>
+      <AirQualityLegend />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiTtsRouteImport } from './routes/api/tts'
 import { Route as ApiPlaceImageRouteImport } from './routes/api/place-image'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiAirQualityRouteImport } from './routes/api/air-quality'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,15 +35,22 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAirQualityRoute = ApiAirQualityRouteImport.update({
+  id: '/api/air-quality',
+  path: '/api/air-quality',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/air-quality': typeof ApiAirQualityRoute
   '/api/chat': typeof ApiChatRoute
   '/api/place-image': typeof ApiPlaceImageRoute
   '/api/tts': typeof ApiTtsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/air-quality': typeof ApiAirQualityRoute
   '/api/chat': typeof ApiChatRoute
   '/api/place-image': typeof ApiPlaceImageRoute
   '/api/tts': typeof ApiTtsRoute
@@ -50,20 +58,29 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/air-quality': typeof ApiAirQualityRoute
   '/api/chat': typeof ApiChatRoute
   '/api/place-image': typeof ApiPlaceImageRoute
   '/api/tts': typeof ApiTtsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/chat' | '/api/place-image' | '/api/tts'
+  fullPaths:
+    '/' | '/api/air-quality' | '/api/chat' | '/api/place-image' | '/api/tts'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/chat' | '/api/place-image' | '/api/tts'
-  id: '__root__' | '/' | '/api/chat' | '/api/place-image' | '/api/tts'
+  to: '/' | '/api/air-quality' | '/api/chat' | '/api/place-image' | '/api/tts'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/air-quality'
+    | '/api/chat'
+    | '/api/place-image'
+    | '/api/tts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAirQualityRoute: typeof ApiAirQualityRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiPlaceImageRoute: typeof ApiPlaceImageRoute
   ApiTtsRoute: typeof ApiTtsRoute
@@ -99,11 +116,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/air-quality': {
+      id: '/api/air-quality'
+      path: '/api/air-quality'
+      fullPath: '/api/air-quality'
+      preLoaderRoute: typeof ApiAirQualityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAirQualityRoute: ApiAirQualityRoute,
   ApiChatRoute: ApiChatRoute,
   ApiPlaceImageRoute: ApiPlaceImageRoute,
   ApiTtsRoute: ApiTtsRoute,

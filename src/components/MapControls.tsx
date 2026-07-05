@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Box, Compass, CloudRain, LocateFixed, Minus, Plus } from "lucide-react";
+import { Box, Compass, CloudRain, LocateFixed, Minus, Plus, Wind } from "lucide-react";
 import { useMap } from "react-map-gl/mapbox";
 import { useCityStore } from "@/store/useCityStore";
+import { useSceneStore } from "@/store/useSceneStore";
 import { LAYOUT, topSafe } from "@/lib/layout";
 
 const PARIS_CENTER: [number, number] = [2.3487, 48.855];
@@ -43,6 +44,8 @@ export function MapControls() {
   const [is3D, setIs3D] = useState(true);
   const rainMode = useCityStore((s) => s.rainMode);
   const setRainMode = useCityStore((s) => s.setRainMode);
+  const airQualityVisible = useSceneStore((s) => s.airQualityVisible);
+  const toggleAirQuality = useSceneStore((s) => s.toggleAirQuality);
 
   const getMap = () => mapRef?.getMap();
 
@@ -113,6 +116,13 @@ export function MapControls() {
       </CtrlButton>
       <CtrlButton onClick={() => void setRainMode(!rainMode)} label={rainMode ? "Clear rain" : "Rain mode"} active={rainMode}>
         <CloudRain size={18} strokeWidth={1.5} />
+      </CtrlButton>
+      <CtrlButton
+        onClick={toggleAirQuality}
+        label={airQualityVisible ? "Hide air quality" : "Live Paris air quality"}
+        active={airQualityVisible}
+      >
+        <Wind size={18} strokeWidth={1.5} />
       </CtrlButton>
     </motion.div>
   );

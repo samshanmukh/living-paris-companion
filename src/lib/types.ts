@@ -144,3 +144,21 @@ export interface RouteResponse {
   accessible: boolean;
   note?: string;
 }
+
+export interface AqiStation {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  aqi: number;
+  dominantPol?: string;
+}
+
+export interface ParisAirQualitySnapshot {
+  cityAqi: number;
+  cityName: string;
+  dominantPol?: string;
+  updatedAt: string;
+  stations: AqiStation[];
+  attribution: string;
+}
