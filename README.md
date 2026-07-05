@@ -6,6 +6,8 @@ Living Paris is a voice-first AI city companion for Paris. Describe the day you 
 
 Built as a glassmorphism map experience on Mapbox Standard 3D, with a concierge that listens more than it searches.
 
+**Live demo:** [https://living-paris-companion.vercel.app/](https://living-paris-companion.vercel.app/)
+
 ---
 
 ## Features
