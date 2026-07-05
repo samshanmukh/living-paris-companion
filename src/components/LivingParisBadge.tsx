@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useTraitsStore, selectKnowsYou } from "@/store/useTraitsStore";
+import { ParisSkyIndicator } from "./ParisSkyIndicator";
 import { topSafe } from "@/lib/layout";
 
 export function LivingParisBadge() {
@@ -57,6 +58,7 @@ export function LivingParisBadge() {
         >
           Living Paris
         </span>
+        <ParisSkyIndicator />
       </div>
     </motion.div>
   );

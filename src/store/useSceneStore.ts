@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ParisAirQualitySnapshot } from "@/lib/types";
+import type { ParisConditions } from "@/lib/parisWeather";
 
 export type Season = "spring" | "summer" | "autumn" | "winter";
 
@@ -9,6 +10,7 @@ interface SceneState {
   rainOverride: boolean | null; // null = live, true = force rain mode
   airQualityVisible: boolean;
   airQualitySnapshot: ParisAirQualitySnapshot | null;
+  parisConditions: ParisConditions | null;
   persona: string; // e.g. "flaneur"
   setHour: (h: number | null) => void;
   setSeason: (s: Season | null) => void;
@@ -16,6 +18,7 @@ interface SceneState {
   setAirQualityVisible: (on: boolean) => void;
   toggleAirQuality: () => void;
   setAirQualitySnapshot: (snapshot: ParisAirQualitySnapshot | null) => void;
+  setParisConditions: (conditions: ParisConditions | null) => void;
   setPersona: (p: string) => void;
 }
 
@@ -25,6 +28,7 @@ export const useSceneStore = create<SceneState>((set) => ({
   rainOverride: null,
   airQualityVisible: false,
   airQualitySnapshot: null,
+  parisConditions: null,
   persona: "flaneur",
   setHour: (h) => set({ hourOverride: h }),
   setSeason: (s) => set({ seasonOverride: s }),
@@ -32,5 +36,6 @@ export const useSceneStore = create<SceneState>((set) => ({
   setAirQualityVisible: (on) => set({ airQualityVisible: on }),
   toggleAirQuality: () => set((s) => ({ airQualityVisible: !s.airQualityVisible })),
   setAirQualitySnapshot: (snapshot) => set({ airQualitySnapshot: snapshot }),
+  setParisConditions: (conditions) => set({ parisConditions: conditions }),
   setPersona: (p) => set({ persona: p }),
 }));

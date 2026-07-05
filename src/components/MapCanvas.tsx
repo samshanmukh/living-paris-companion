@@ -13,12 +13,13 @@ import { DemoLayers } from "./DemoLayers";
 import { AirQualityLayer } from "./AirQualityLayer";
 import { AirQualityLegend } from "./AirQualityLegend";
 import { MapControls } from "./MapControls";
-import { fetchParisConditions, type ParisConditions, type LightPreset } from "@/lib/parisWeather";
+import { fetchParisConditions, resolveLightPreset, type ParisConditions } from "@/lib/parisWeather";
 import { useMapCamera } from "@/hooks/useMapCamera";
 import { useMoodMap } from "@/hooks/useMoodMap";
 import { useRoutePreview } from "@/hooks/useRoutePreview";
 import { MAP_PADDING } from "@/lib/mapCamera";
 import { MapFocusVeil } from "./MapFocusVeil";
+import { MapSunLayer } from "./MapSunLayer";
 
 const MAPBOX_TOKEN =
   (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ??
@@ -49,6 +50,7 @@ export function MapCanvas() {
   const hourOverride = useSceneStore((s) => s.hourOverride);
   const seasonOverride = useSceneStore((s) => s.seasonOverride);
   const rainOverride = useSceneStore((s) => s.rainOverride);
+  const setParisConditions = useSceneStore((s) => s.setParisConditions);
   const reduced = usePrefsStore((s) => s.reducedMotion);
   const mapRef = useRef<MapRef | null>(null);
   const [conditions, setConditions] = useState<ParisConditions | null>(null);
@@ -63,13 +65,18 @@ export function MapCanvas() {
     let cancelled = false;
     const load = () => {
       fetchParisConditions()
-        .then((c) => { if (!cancelled) setConditions(c); })
+        .then((c) => {
+          if (!cancelled) {
+            setConditions(c);
+            setParisConditions(c);
+          }
+        })
         .catch(() => {});
     };
     load();
     const id = window.setInterval(load, 10 * 60 * 1000);
     return () => { cancelled = true; window.clearInterval(id); };
-  }, []);
+  }, [setParisConditions]);
 
   // Lighting + weather: live Paris conditions, with conversation-driven overrides only.
   useEffect(() => {
@@ -77,13 +84,7 @@ export function MapCanvas() {
     const map = mapRef.current?.getMap?.();
     if (!map) return;
 
-    let preset: LightPreset = conditions.lightPreset;
-    if (hourOverride != null) {
-      if (hourOverride >= 5 && hourOverride < 8) preset = "dawn";
-      else if (hourOverride >= 8 && hourOverride < 18) preset = "day";
-      else if (hourOverride >= 18 && hourOverride < 21) preset = "dusk";
-      else preset = "night";
-    }
+    const preset = resolveLightPreset(conditions, hourOverride);
 
     try {
       map.setConfigProperty("basemap", "lightPreset", preset);
@@ -235,6 +236,7 @@ export function MapCanvas() {
         <RouteLineLayer />
         <RoutePreviewOverlay />
         <AirQualityLayer />
+        <MapSunLayer />
         <DemoLayers />
         <UserLocationMarker />
         <MapAnnotationMarker />

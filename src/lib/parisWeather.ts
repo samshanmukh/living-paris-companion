@@ -44,6 +44,37 @@ function hourToPreset(hour: number, isDay: boolean): LightPreset {
   return "night";
 }
 
+export function presetFromHour(hour: number, isDay = true): LightPreset {
+  return hourToPreset(hour, isDay);
+}
+
+export type SkyKind = "sun" | "moon" | "sunrise" | "sunset";
+
+export function skyKindFromPreset(preset: LightPreset): SkyKind {
+  if (preset === "night") return "moon";
+  if (preset === "dawn") return "sunrise";
+  if (preset === "dusk") return "sunset";
+  return "sun";
+}
+
+/** Resolve map light preset from live conditions or concierge hour override. */
+export function resolveLightPreset(
+  conditions: ParisConditions | null,
+  hourOverride: number | null,
+): LightPreset {
+  if (hourOverride != null) return presetFromHour(hourOverride, hourOverride >= 8 && hourOverride < 18);
+  return conditions?.lightPreset ?? "day";
+}
+
+export function formatParisTime(date = new Date()): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Paris",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 export async function fetchParisConditions(): Promise<ParisConditions> {
   const url =
     "https://api.open-meteo.com/v1/forecast?latitude=48.8566&longitude=2.3522" +
